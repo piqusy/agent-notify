@@ -1,7 +1,6 @@
 #!/usr/bin/env node
-import { notify, loadConfig, BUILTIN_SOUNDS, defaultConfigPath } from "@agent-notify/core";
-import { execSync } from "child_process";
-import * as fs from "fs";
+import { notify, BUILTIN_SOUNDS } from "@agent-notify/core";
+import { cmdInit } from "./commands/init.js";
 
 const [, , command, ...args] = process.argv;
 
@@ -26,49 +25,6 @@ function cmdSounds(): void {
   }
 }
 
-async function cmdInit(): Promise<void> {
-  console.log("agent-notify setup");
-  console.log("==================");
-
-  // Check macOS Sequoia
-  try {
-    const version = execSync("sw_vers -productVersion", { encoding: "utf8" }).trim();
-    if (version.startsWith("15.")) {
-      console.log(`\n⚠  macOS Sequoia (${version}) detected.`);
-      console.log(
-        "   Sequoia restricts some notification APIs. terminal-notifier is recommended."
-      );
-      // Check if terminal-notifier is available
-      const tnPaths = [
-        "/opt/homebrew/bin/terminal-notifier",
-        "/usr/local/bin/terminal-notifier",
-      ];
-      const hasTN = tnPaths.some((p) => fs.existsSync(p));
-      if (!hasTN) {
-        console.log(
-          "\n   terminal-notifier not found. Install it:\n   brew install terminal-notifier"
-        );
-      } else {
-        console.log("\n   terminal-notifier found. You are all set.");
-      }
-    }
-  } catch {
-    // Not macOS or sw_vers not available
-  }
-
-  // Show config path
-  console.log(`\nConfig file: ${defaultConfigPath}`);
-  const configExists = fs.existsSync(defaultConfigPath);
-  if (!configExists) {
-    console.log("No config file found. Using defaults.");
-    console.log("Create one at the path above to customize behavior.");
-  } else {
-    console.log("Config file found.");
-    const config = await loadConfig();
-    console.log(JSON.stringify(config, null, 2));
-  }
-}
-
 function printHelp(): void {
   console.log(`agent-notify — send desktop notifications from AI agents
 
@@ -77,7 +33,7 @@ Usage:
   agent-notify question [dir]       Send a "question/waiting" notification
   agent-notify test [done|question] Send a test notification
   agent-notify sounds               List available notification sounds
-  agent-notify init                 Setup and diagnostics
+  agent-notify init                 Interactive setup wizard
   agent-notify --help               Show this help
 `);
 }

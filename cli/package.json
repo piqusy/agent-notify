@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@agent-notify/core": "workspace:*"
+    "@agent-notify/core": "workspace:*",
+    "@inquirer/prompts": "^7.0.0"
   },
   "keywords": ["agent-notify", "cli", "notifications"],
   "license": "MIT"
