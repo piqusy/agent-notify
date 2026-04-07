@@ -25,3 +25,9 @@ export interface Config {
   terminalApp:     string | null   // null = auto-detect via TERM_PROGRAM
   backend:         NotifyBackend | null   // null = auto-detect
 }
+
+export interface NotifyPayload {
+  title: string
+  body:  string
+  sound?: string
+}
