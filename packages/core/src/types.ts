@@ -13,8 +13,9 @@ export interface SoundConfig {
 }
 
 export interface EventFilter {
-  done:     boolean
-  question: boolean
+  done:       boolean
+  question:   boolean
+  permission: boolean
 }
 
 export interface Config {
@@ -33,7 +34,8 @@ export interface NotifyPayload {
 }
 
 export interface NotifyInput {
-  state: NotifyState
-  tool: string
-  cwd?: string
+  state:    NotifyState
+  trigger?: "done" | "question" | "permission"  // if omitted, falls back to state
+  tool:     string
+  cwd?:     string
 }

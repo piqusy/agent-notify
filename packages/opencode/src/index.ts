@@ -30,11 +30,12 @@ async function handleSessionDone(event: SessionEvent): Promise<void> {
   }
 }
 
-async function handleQuestion(event: PermissionEvent): Promise<void> {
+async function handlePermission(event: PermissionEvent): Promise<void> {
   try {
     if (event.session?.parentID) return;
     await notify({
       state: "question",
+      trigger: "permission",
       tool: "opencode",
       cwd: event.session?.cwd,
     });
@@ -46,5 +47,5 @@ async function handleQuestion(event: PermissionEvent): Promise<void> {
 export default {
   "session.idle": handleSessionDone,
   "session.error": handleSessionDone,
-  "permission.updated": handleQuestion,
+  "permission.updated": handlePermission,
 };

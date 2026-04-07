@@ -145,6 +145,7 @@ export async function cmdInit(): Promise<void> {
     choices: [
       { name: "Done (agent finished work)", value: "done", checked: true },
       { name: "Question (agent waiting for input)", value: "question", checked: true },
+      { name: "Permission (agent requesting permission)", value: "permission", checked: true },
     ],
   })
 
@@ -164,8 +165,9 @@ export async function cmdInit(): Promise<void> {
     quietHours,
     sounds: { done: soundDone, question: soundQuestion },
     events: {
-      done: enabledEvents.includes("done"),
-      question: enabledEvents.includes("question"),
+      done:       enabledEvents.includes("done"),
+      question:   enabledEvents.includes("question"),
+      permission: enabledEvents.includes("permission"),
     },
     terminalApp,
     backend,

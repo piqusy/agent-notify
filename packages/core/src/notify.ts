@@ -38,8 +38,9 @@ function getGitBranch(cwd: string): string | null {
 export async function notify(input: NotifyInput): Promise<void> {
   const config: Config = await loadConfig()
 
-  // 1. Event filter
-  if (!config.events[input.state]) return
+  // 1. Event filter — use trigger if provided, otherwise fall back to state
+  const eventKey = input.trigger ?? input.state
+  if (!config.events[eventKey]) return
 
   // 2. Focus check — skip if terminal app is null (no app to check)
   if (config.terminalApp !== null) {

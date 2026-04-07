@@ -7,7 +7,7 @@ export const defaultConfig: Config = {
   cooldownSeconds: 3,
   quietHours:      { start: 22, end: 8 },
   sounds:          { done: "Morse", question: "Submarine" },
-  events:          { done: true, question: true },
+  events:          { done: true, question: true, permission: true },
   terminalApp:     null,
   backend:         null,
 }

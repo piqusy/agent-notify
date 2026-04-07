@@ -10,7 +10,8 @@
   },
   "events": {
     "done": true,
-    "question": true
+    "question": true,
+    "permission": true
   },
   "terminalApp": null,
   "backend": null
