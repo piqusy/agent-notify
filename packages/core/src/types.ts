@@ -31,3 +31,9 @@ export interface NotifyPayload {
   body:  string
   sound?: string
 }
+
+export interface NotifyInput {
+  state: NotifyState
+  tool: string
+  cwd?: string
+}
