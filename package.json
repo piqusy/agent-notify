@@ -7,9 +7,9 @@
     "cli"
   ],
   "scripts": {
-    "build": "pnpm --filter @agent-notify/core build && pnpm --filter opencode-agent-notify build && pnpm --filter agent-notify-cli build",
+    "build": "bun run --filter @agent-notify/core build && bun run --filter opencode-agent-notify build && bun run --filter agent-notify-cli build",
     "test": "vitest run",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "bun run -r typecheck"
   },
   "devDependencies": {
     "@types/node": "25.5.2",
