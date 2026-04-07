@@ -1,1 +1,19 @@
-{ "name": "@agent-notify/cli", "version": "0.1.0", "private": true }
+{
+  "name": "agent-notify-cli",
+  "version": "0.1.0",
+  "description": "CLI for agent-notify notifications",
+  "type": "module",
+  "bin": {
+    "agent-notify": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --outDir dist",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@agent-notify/core": "workspace:*"
+  },
+  "keywords": ["agent-notify", "cli", "notifications"],
+  "license": "MIT"
+}
