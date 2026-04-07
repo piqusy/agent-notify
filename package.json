@@ -1,16 +1,21 @@
 {
   "name": "agent-notify-workspace",
   "private": true,
-  "workspaces": ["packages/core", "packages/opencode", "cli"],
+  "workspaces": [
+    "packages/core",
+    "packages/opencode",
+    "cli"
+  ],
   "scripts": {
     "build": "tsup",
-    "test":  "vitest run",
-    "dev":   "tsup --watch",
+    "test": "vitest run",
+    "dev": "tsup --watch",
     "typecheck": "tsc --build --noEmit"
   },
   "devDependencies": {
+    "@types/node": "25.5.2",
+    "tsup": "^8.0.0",
     "typescript": "^5.4.0",
-    "tsup":       "^8.0.0",
-    "vitest":     "^2.0.0"
+    "vitest": "^2.0.0"
   }
 }
