@@ -10,6 +10,10 @@
       "types": "./dist/index.d.ts"
     }
   },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit"
+  },
   "files": ["dist"],
   "license": "MIT",
   "repository": {
