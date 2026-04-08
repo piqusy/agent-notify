@@ -128,3 +128,71 @@ jobs:
             ```
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-tap:
+    name: Update Homebrew Tap
+    needs: release
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+
+      - name: Flatten artifacts into dist/
+        run: |
+          find dist/ -mindepth 2 -type f -exec mv {} dist/ \;
+          find dist/ -empty -type d -delete
+
+      - name: Recompute tarball SHAs
+        id: shas
+        run: |
+          cd dist
+          tar -czf agent-notify-darwin-arm64.tar.gz agent-notify-darwin-arm64
+          tar -czf agent-notify-darwin-x64.tar.gz agent-notify-darwin-x64
+          echo "arm64=$(sha256sum agent-notify-darwin-arm64.tar.gz | awk '{print $1}')" >> $GITHUB_OUTPUT
+          echo "x64=$(sha256sum agent-notify-darwin-x64.tar.gz | awk '{print $1}')" >> $GITHUB_OUTPUT
+
+      - name: Patch formula
+        env:
+          VERSION: ${{ github.ref_name }}
+          ARM64_SHA: ${{ steps.shas.outputs.arm64 }}
+          X64_SHA: ${{ steps.shas.outputs.x64 }}
+        run: |
+          sed -i \
+            -e "s|HOMEBREW_VERSION_PLACEHOLDER|${VERSION#v}|g" \
+            -e "s|HOMEBREW_ARM64_SHA_PLACEHOLDER|${ARM64_SHA}|g" \
+            -e "s|HOMEBREW_X64_SHA_PLACEHOLDER|${X64_SHA}|g" \
+            Formula/agent-notify.rb
+
+      - name: Configure SSH for tap repo
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}" > ~/.ssh/tap_deploy_key
+          chmod 600 ~/.ssh/tap_deploy_key
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          cat >> ~/.ssh/config <<EOF
+          Host github-tap
+            HostName github.com
+            User git
+            IdentityFile ~/.ssh/tap_deploy_key
+          EOF
+
+      - name: Clone tap repo
+        run: git clone git@github-tap:piqusy/homebrew-agent-notify.git tap
+
+      - name: Copy patched formula into tap
+        run: |
+          cp Formula/agent-notify.rb tap/Formula/agent-notify.rb
+
+      - name: Commit and push to tap
+        run: |
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/agent-notify.rb
+          git commit -m "update: agent-notify ${{ github.ref_name }}"
+          git push
