@@ -10,6 +10,8 @@ import {
   TERM_PROGRAM_MAP,
 } from "@agent-notify/core"
 import type { Config, NotifyBackend } from "@agent-notify/core"
+import { selectWithPreview } from "../prompts/select-with-preview.js"
+import { playSound } from "../sounds/play.js"
 
 const SOUND_CHOICES = [
   { name: "None (silent)", value: null as string | null },
@@ -127,16 +129,18 @@ export async function cmdInit(): Promise<void> {
   }
 
   // --- Sounds ---
-  const soundDone = await select<string | null>({
+  const soundDone = await selectWithPreview<string | null>({
     message: "Sound for 'done' notifications",
     choices: SOUND_CHOICES,
     default: defaultConfig.sounds.done,
+    onPreview: (v) => { if (v) playSound(v) },
   })
 
-  const soundQuestion = await select<string | null>({
+  const soundQuestion = await selectWithPreview<string | null>({
     message: "Sound for 'question' notifications",
     choices: SOUND_CHOICES,
     default: defaultConfig.sounds.question,
+    onPreview: (v) => { if (v) playSound(v) },
   })
 
   // --- Events ---
