@@ -106,7 +106,7 @@ jobs:
             ## Install via Homebrew
 
             ```sh
-            brew tap piqusy/agent-notify
+            brew tap piqusy/tap
             brew install agent-notify
             ```
 
@@ -182,7 +182,7 @@ jobs:
           EOF
 
       - name: Clone tap repo
-        run: git clone git@github-tap:piqusy/homebrew-agent-notify.git tap
+        run: git clone git@github-tap:piqusy/homebrew-tap.git tap
 
       - name: Copy patched formula into tap
         run: |
