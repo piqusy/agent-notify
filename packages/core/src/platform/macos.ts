@@ -1,4 +1,4 @@
-import { execSync } from "child_process";
+import { execSync, spawnSync } from "child_process";
 import type { NotifyBackend, NotifyPayload } from "../types.js";
 
 function escapeDouble(s: string): string {
@@ -8,15 +8,11 @@ function escapeDouble(s: string): string {
 export function sendMacOS(payload: NotifyPayload, backend: NotifyBackend): void {
   try {
     if (backend === "terminal-notifier") {
-      const args = [
-        "terminal-notifier",
-        `-title "${escapeDouble(payload.title)}"`,
-        `-message "${escapeDouble(payload.body)}"`,
-      ];
+      const args = ["-title", payload.title, "-message", payload.body];
       if (payload.sound) {
-        args.push(`-sound "${escapeDouble(payload.sound)}"`);
+        args.push("-sound", payload.sound);
       }
-      execSync(args.join(" "), { stdio: "ignore" });
+      spawnSync("terminal-notifier", args, { stdio: "ignore" });
     } else {
       // osascript
       const sound = payload.sound ? ` sound name "${escapeDouble(payload.sound)}"` : "";
