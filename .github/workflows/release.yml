@@ -137,24 +137,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: dist/
-
-      - name: Flatten artifacts into dist/
+      - name: Download published release tarballs
+        # Download the *actual* release assets so SHA256 matches what Homebrew fetches
         run: |
-          find dist/ -mindepth 2 -type f -exec mv {} dist/ \;
-          find dist/ -empty -type d -delete
+          gh release download ${{ github.ref_name }} \
+            -R piqusy/agent-notify \
+            -p "agent-notify-darwin-arm64.tar.gz" \
+            -p "agent-notify-darwin-x64.tar.gz" \
+            --dir dist/
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Recompute tarball SHAs
+      - name: Compute SHAs from release tarballs
         id: shas
         run: |
-          cd dist
-          tar -czf agent-notify-darwin-arm64.tar.gz agent-notify-darwin-arm64
-          tar -czf agent-notify-darwin-x64.tar.gz agent-notify-darwin-x64
-          echo "arm64=$(sha256sum agent-notify-darwin-arm64.tar.gz | awk '{print $1}')" >> $GITHUB_OUTPUT
-          echo "x64=$(sha256sum agent-notify-darwin-x64.tar.gz | awk '{print $1}')" >> $GITHUB_OUTPUT
+          echo "arm64=$(sha256sum dist/agent-notify-darwin-arm64.tar.gz | awk '{print $1}')" >> $GITHUB_OUTPUT
+          echo "x64=$(sha256sum dist/agent-notify-darwin-x64.tar.gz | awk '{print $1}')" >> $GITHUB_OUTPUT
 
       - name: Patch formula
         env:
@@ -185,8 +183,7 @@ jobs:
         run: git clone git@github-tap:piqusy/homebrew-tap.git tap
 
       - name: Copy patched formula into tap
-        run: |
-          cp Formula/agent-notify.rb tap/Formula/agent-notify.rb
+        run: cp Formula/agent-notify.rb tap/Formula/agent-notify.rb
 
       - name: Commit and push to tap
         run: |
