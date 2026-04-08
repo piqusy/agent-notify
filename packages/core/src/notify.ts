@@ -64,7 +64,14 @@ export async function notify(input: NotifyInput): Promise<void> {
 
   const sound = isQuietHour(config.quietHours)
     ? undefined
-    : resolveSound(config.sounds[input.state]) ?? undefined
+    : (() => {
+        const trigger = input.trigger ?? input.state
+        // permission sound falls back to question sound if null
+        const soundKey = trigger === "permission"
+          ? (config.sounds.permission ?? config.sounds.question)
+          : config.sounds[trigger as "done" | "question"] ?? config.sounds[input.state]
+        return resolveSound(soundKey) ?? undefined
+      })()
 
   const payload: NotifyPayload = { title, body, ...(sound ? { sound } : {}) }
 

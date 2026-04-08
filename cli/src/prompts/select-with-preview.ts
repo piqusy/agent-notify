@@ -1,6 +1,8 @@
 /**
- * A select prompt that mirrors @inquirer/select but adds a "p" keybinding
- * to trigger a preview/play callback on the currently highlighted choice.
+ * A select prompt that mirrors @inquirer/select but adds:
+ *  - "p" keybinding to preview/play the currently highlighted choice
+ *  - "j" / "k" vim-style up/down navigation
+ *  - ESC to cancel (via CANCEL sentinel, not throw)
  */
 import {
   createPrompt,
@@ -15,8 +17,8 @@ import {
   ExitPromptError,
   type Status,
 } from "@inquirer/core"
-// yoctocolors-cjs is a dependency of @inquirer/core — available transitively
 import colors from "yoctocolors-cjs"
+import { CANCEL } from "./cancel.js"
 
 // ---- Types ----------------------------------------------------------------
 
@@ -40,15 +42,14 @@ export interface SelectWithPreviewConfig<V> {
 
 // ---- Prompt ---------------------------------------------------------------
 
-// Extend the default theme with select-specific icons
 const selectTheme = {
   icon: { cursor: "❯" },
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const selectWithPreview: <V>(config: SelectWithPreviewConfig<V>) => Promise<V> =
+export const selectWithPreview: <V>(config: SelectWithPreviewConfig<V>) => Promise<V | typeof CANCEL> =
   createPrompt(
-  <V>(config: SelectWithPreviewConfig<V>, done: (value: V) => void): string => {
+  <V>(config: SelectWithPreviewConfig<V>, done: (value: V | typeof CANCEL) => void): string => {
     const { choices, pageSize = 7, loop = true, onPreview } = config
     const theme = makeTheme(selectTheme, {})
 
@@ -65,6 +66,12 @@ export const selectWithPreview: <V>(config: SelectWithPreviewConfig<V>) => Promi
 
     useKeypress((key) => {
       if (status === "done") return
+
+      if (key.name === "escape") {
+        setStatus("done")
+        done(CANCEL)
+        return
+      }
 
       if (isEnterKey(key)) {
         const choice = choices[active]
@@ -85,10 +92,6 @@ export const selectWithPreview: <V>(config: SelectWithPreviewConfig<V>) => Promi
         } while (choices[next]?.disabled && attempts < choices.length)
         setActive(next)
         return
-      }
-
-      if (key.name === "escape") {
-        throw new ExitPromptError()
       }
 
       if (key.name === "p" && onPreview) {
@@ -138,6 +141,7 @@ export const selectWithPreview: <V>(config: SelectWithPreviewConfig<V>) => Promi
     if (onPreview) {
       helpBindings.push(`${colors.bold("p")} preview sound`)
     }
+    helpBindings.push(`${colors.bold("esc")} cancel`)
     const helpTip =
       status !== "done" ? `\n${colors.dim(helpBindings.join("  "))}` : ""
 

@@ -8,8 +8,9 @@ export interface QuietHours {
 }
 
 export interface SoundConfig {
-  done:     string | null   // built-in name, file path, or null (silent)
-  question: string | null
+  done:       string | null   // built-in name, file path, or null (silent)
+  question:   string | null
+  permission: string | null   // null = same as question
 }
 
 export interface EventFilter {

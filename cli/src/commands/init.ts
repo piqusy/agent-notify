@@ -1,4 +1,3 @@
-import { confirm, input, select, checkbox } from "@inquirer/prompts"
 import { execSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as path from "node:path"
@@ -10,7 +9,11 @@ import {
   TERM_PROGRAM_MAP,
 } from "@agent-notify/core"
 import type { Config, NotifyBackend } from "@agent-notify/core"
+import { ask } from "../prompts/cancel.js"
 import { selectWithPreview } from "../prompts/select-with-preview.js"
+import { checkbox } from "../prompts/checkbox.js"
+import { confirm } from "../prompts/confirm.js"
+import { input } from "../prompts/input.js"
 import { playSound } from "../sounds/play.js"
 
 const SOUND_CHOICES = [
@@ -68,11 +71,11 @@ export async function cmdInit(): Promise<void> {
   }
 
   // --- Backend ---
-  const backend = await select<NotifyBackend | null>({
+  const backend = await ask(selectWithPreview<NotifyBackend | null>({
     message: "Notification backend",
     choices: BACKEND_CHOICES,
     default: null,
-  })
+  }))
 
   // --- Terminal app ---
   const detectedTerminal = process.env.TERM_PROGRAM
@@ -80,7 +83,7 @@ export async function cmdInit(): Promise<void> {
     : null
 
   let terminalApp: string | null = null
-  const terminalChoice = await select<string | null>({
+  const terminalChoice = await ask(selectWithPreview<string | null>({
     message: "Terminal app for focus detection",
     choices: detectedTerminal
       ? [
@@ -89,85 +92,95 @@ export async function cmdInit(): Promise<void> {
         ]
       : TERMINAL_CHOICES,
     default: null,
-  })
+  }))
 
   if (terminalChoice === "__custom__") {
-    const custom = await input({
+    const custom = await ask(input({
       message: "Terminal app name (as shown in macOS Activity Monitor)",
       validate: (v) => v.trim().length > 0 || "Required",
-    })
+    }))
     terminalApp = custom.trim()
   } else {
     terminalApp = terminalChoice
   }
 
   // --- Quiet hours ---
-  const quietHoursEnabled = await confirm({
+  const quietHoursEnabled = await ask(confirm({
     message: "Enable quiet hours (mute sounds at night)?",
     default: true,
-  })
+  }))
 
   let quietHours = defaultConfig.quietHours
   if (quietHoursEnabled) {
-    const startStr = await input({
+    const startStr = await ask(input({
       message: "Quiet hours start (0–23)",
       default: String(defaultConfig.quietHours.start),
       validate: (v) => {
         const n = parseInt(v, 10)
         return (!isNaN(n) && n >= 0 && n <= 23) || "Enter a number 0–23"
       },
-    })
-    const endStr = await input({
+    }))
+    const endStr = await ask(input({
       message: "Quiet hours end (0–23)",
       default: String(defaultConfig.quietHours.end),
       validate: (v) => {
         const n = parseInt(v, 10)
         return (!isNaN(n) && n >= 0 && n <= 23) || "Enter a number 0–23"
       },
-    })
+    }))
     quietHours = { start: parseInt(startStr, 10), end: parseInt(endStr, 10) }
   }
 
   // --- Sounds ---
-  const soundDone = await selectWithPreview<string | null>({
+  const soundDone = await ask(selectWithPreview<string | null>({
     message: "Sound for 'done' notifications",
     choices: SOUND_CHOICES,
     default: defaultConfig.sounds.done,
     onPreview: (v) => { if (v) playSound(v) },
-  })
+  }))
 
-  const soundQuestion = await selectWithPreview<string | null>({
+  const soundQuestion = await ask(selectWithPreview<string | null>({
     message: "Sound for 'question' notifications",
     choices: SOUND_CHOICES,
     default: defaultConfig.sounds.question,
     onPreview: (v) => { if (v) playSound(v) },
-  })
+  }))
+
+  const soundPermission = await ask(selectWithPreview<string | null>({
+    message: "Sound for 'permission' notifications",
+    choices: [
+      { name: "Same as question (default)", value: null as string | null },
+      ...BUILTIN_SOUNDS.map((s) => ({ name: s, value: s as string | null })),
+    ],
+    default: defaultConfig.sounds.permission,
+    onPreview: (v) => { if (v) playSound(v) },
+  }))
 
   // --- Events ---
-  const enabledEvents = await checkbox({
+  const enabledEvents = await ask(checkbox({
     message: "Which events should trigger notifications?",
     choices: [
       { name: "Done (agent finished work)", value: "done", checked: true },
       { name: "Question (agent waiting for input)", value: "question", checked: true },
       { name: "Permission (agent requesting permission)", value: "permission", checked: true },
     ],
-  })
+  }))
 
   // --- Cooldown ---
-  const cooldownStr = await input({
+  const cooldownStr = await ask(input({
     message: "Cooldown between notifications (seconds)",
     default: String(defaultConfig.cooldownSeconds),
     validate: (v) => {
       const n = parseInt(v, 10)
       return (!isNaN(n) && n >= 0) || "Enter a non-negative integer"
     },
-  })
+  }))
 
   // --- Build config ---
   const config: Config = {
     cooldownSeconds: parseInt(cooldownStr, 10),
     quietHours,
-    sounds: { done: soundDone, question: soundQuestion },
+    sounds: { done: soundDone, question: soundQuestion, permission: soundPermission },
     events: {
       done:       enabledEvents.includes("done"),
       question:   enabledEvents.includes("question"),
@@ -181,7 +194,7 @@ export async function cmdInit(): Promise<void> {
   console.log("\nConfig to be written:")
   console.log(JSON.stringify(config, null, 2))
 
-  const proceed = await confirm({ message: "Write config?", default: true })
+  const proceed = await ask(confirm({ message: "Write config?", default: true }))
   if (!proceed) {
     console.log("Aborted.")
     return
@@ -194,19 +207,19 @@ export async function cmdInit(): Promise<void> {
   console.log(`\nConfig written to ${defaultConfigPath}`)
 
   // --- Test ---
-  const sendTest = await confirm({
+  const sendTest = await ask(confirm({
     message: "Send a test notification now?",
     default: true,
-  })
+  }))
   if (sendTest) {
-    const state = await select<"done" | "question">({
+    const state = await ask(selectWithPreview<"done" | "question">({
       message: "Which type?",
       choices: [
         { name: "Done", value: "done" },
         { name: "Question", value: "question" },
       ],
       default: "done",
-    })
+    }))
     await notify({ state, tool: "agent-notify-setup", cwd: process.cwd() })
     console.log("Test notification sent.")
   }

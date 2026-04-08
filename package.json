@@ -8,6 +8,9 @@
   ],
   "scripts": {
     "build": "bun run --filter @agent-notify/core build && bun run --filter opencode-agent-notify build && bun run --filter agent-notify-cli build",
+    "build:binary": "bun run build && bun build cli/src/index.ts --compile --outfile dist/agent-notify --target bun",
+    "build:binary:arm64": "bun run build && bun build cli/src/index.ts --compile --outfile dist/agent-notify-darwin-arm64 --target bun --target-arch arm64",
+    "build:binary:x64": "bun run build && bun build cli/src/index.ts --compile --outfile dist/agent-notify-darwin-x64 --target bun --target-arch x64",
     "test": "vitest run",
     "typecheck": "bun run -r typecheck"
   },

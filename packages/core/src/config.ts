@@ -6,7 +6,7 @@ import type { Config } from "./types.js"
 export const defaultConfig: Config = {
   cooldownSeconds: 3,
   quietHours:      { start: 22, end: 8 },
-  sounds:          { done: "Morse", question: "Submarine" },
+  sounds:          { done: "Morse", question: "Submarine", permission: null },
   events:          { done: true, question: true, permission: true },
   terminalApp:     null,
   backend:         null,
