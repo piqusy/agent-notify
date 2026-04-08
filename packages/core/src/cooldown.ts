@@ -1,11 +1,13 @@
 import { readFile, writeFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
 
 /**
  * Returns the path of the per-tool cooldown file.
- * Spaces in tool name replaced with hyphens.
+ * Tool name is sanitized to alphanumeric/hyphen/underscore to prevent path traversal.
  */
 export function cooldownFilePath(tool: string): string {
-  return `/tmp/agent-notify-cooldown-${tool.replace(/ /g, "-")}`
+  const safeTool = tool.replace(/[^a-zA-Z0-9_-]/g, "-")
+  return `${tmpdir()}/agent-notify-cooldown-${safeTool}`
 }
 
 /**

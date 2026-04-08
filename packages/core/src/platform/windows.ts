@@ -1,4 +1,4 @@
-import { execSync } from "child_process";
+import { spawnSync } from "child_process";
 import type { NotifyPayload } from "../types.js";
 
 function escapeSingleQuote(s: string): string {
@@ -10,7 +10,9 @@ export function sendWindows(payload: NotifyPayload): void {
   try {
     const title = escapeSingleQuote(payload.title);
     const body = escapeSingleQuote(payload.body);
-    // Try BurntToast first, fall back to MessageBox
+    // Try BurntToast first, fall back to MessageBox.
+    // Use -EncodedCommand to pass the script as base64 UTF-16LE — avoids all
+    // shell quoting issues when PowerShell is invoked via spawnSync.
     const script = `
       try {
         Import-Module BurntToast -ErrorAction Stop
@@ -19,7 +21,8 @@ export function sendWindows(payload: NotifyPayload): void {
         [System.Windows.Forms.MessageBox]::Show('${body}', '${title}')
       }
     `;
-    execSync(`powershell -Command "${script.replace(/"/g, '\\"')}"`, { stdio: "ignore" });
+    const encoded = Buffer.from(script, "utf16le").toString("base64");
+    spawnSync("powershell", ["-EncodedCommand", encoded], { stdio: "ignore" });
   } catch {
     // swallow errors
   }

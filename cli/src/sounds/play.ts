@@ -1,4 +1,3 @@
-import { execSync } from "node:child_process"
 import { existsSync } from "node:fs"
 
 const SOUND_DIR = "/System/Library/Sounds"
@@ -37,11 +36,10 @@ export function playSound(nameOrPath: string): void {
       })
       child.unref()
     } else if (process.platform === "win32") {
-      const escaped = nameOrPath.replace(/'/g, "''")
-      const child = execSync(
-        `powershell -Command "[System.Media.SoundPlayer]::new('${escaped}').PlaySync()"`,
-        { stdio: "ignore" } as Parameters<typeof execSync>[1],
-      )
+      const { spawnSync } = require("node:child_process") as typeof import("node:child_process")
+      const script = `[System.Media.SoundPlayer]::new('${nameOrPath.replace(/'/g, "''")}').PlaySync()`
+      const encoded = Buffer.from(script, "utf16le").toString("base64")
+      spawnSync("powershell", ["-EncodedCommand", encoded], { stdio: "ignore" })
     }
   } catch {
     // Non-critical — swallow
@@ -58,15 +56,16 @@ export function playSoundSync(nameOrPath: string): void {
       const filePath = nameOrPath.includes("/")
         ? nameOrPath
         : (macOSSoundPath(nameOrPath) ?? nameOrPath)
-      execSync(`afplay "${filePath.replace(/"/g, '\\"')}"`, { stdio: "ignore" })
+      const { spawnSync } = require("node:child_process") as typeof import("node:child_process")
+      spawnSync("afplay", [filePath], { stdio: "ignore" })
     } else if (process.platform === "linux") {
-      execSync(`paplay "${nameOrPath.replace(/"/g, '\\"')}"`, { stdio: "ignore" })
+      const { spawnSync } = require("node:child_process") as typeof import("node:child_process")
+      spawnSync("paplay", [nameOrPath], { stdio: "ignore" })
     } else if (process.platform === "win32") {
-      const escaped = nameOrPath.replace(/'/g, "''")
-      execSync(
-        `powershell -Command "[System.Media.SoundPlayer]::new('${escaped}').PlaySync()"`,
-        { stdio: "ignore" },
-      )
+      const { spawnSync } = require("node:child_process") as typeof import("node:child_process")
+      const script = `[System.Media.SoundPlayer]::new('${nameOrPath.replace(/'/g, "''")}').PlaySync()`
+      const encoded = Buffer.from(script, "utf16le").toString("base64")
+      spawnSync("powershell", ["-EncodedCommand", encoded], { stdio: "ignore" })
     }
   } catch {
     // Non-critical — swallow
