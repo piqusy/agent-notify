@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { notify, BUILTIN_SOUNDS } from "@agent-notify/core";
+import { ExitPromptError } from "@inquirer/core";
 import { cmdInit } from "./commands/init.js";
 import { playSoundSync } from "./sounds/play.js";
 
@@ -85,6 +86,10 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
+  if (err instanceof ExitPromptError) {
+    console.log("\nAborted.");
+    process.exit(0);
+  }
   console.error(err);
   process.exit(1);
 });

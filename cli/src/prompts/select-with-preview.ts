@@ -12,6 +12,7 @@ import {
   isEnterKey,
   isUpKey,
   isDownKey,
+  ExitPromptError,
   type Status,
 } from "@inquirer/core"
 // yoctocolors-cjs is a dependency of @inquirer/core — available transitively
@@ -84,6 +85,10 @@ export const selectWithPreview: <V>(config: SelectWithPreviewConfig<V>) => Promi
         } while (choices[next]?.disabled && attempts < choices.length)
         setActive(next)
         return
+      }
+
+      if (key.name === "escape") {
+        throw new ExitPromptError()
       }
 
       if (key.name === "p" && onPreview) {
