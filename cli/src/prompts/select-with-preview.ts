@@ -74,8 +74,8 @@ export const selectWithPreview: <V>(config: SelectWithPreviewConfig<V>) => Promi
         return
       }
 
-      if (isUpKey(key) || isDownKey(key)) {
-        const direction = isUpKey(key) ? -1 : 1
+      if (isUpKey(key) || isDownKey(key) || key.name === "k" || key.name === "j") {
+        const direction = (isUpKey(key) || key.name === "k") ? -1 : 1
         let next = active
         let attempts = 0
         do {
@@ -127,7 +127,7 @@ export const selectWithPreview: <V>(config: SelectWithPreviewConfig<V>) => Promi
         : ""
 
     const helpBindings: string[] = [
-      `${colors.bold("↑↓")} navigate`,
+      `${colors.bold("↑↓")}/${colors.bold("jk")} navigate`,
       `${colors.bold("enter")} select`,
     ]
     if (onPreview) {
