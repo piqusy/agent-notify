@@ -221,7 +221,7 @@ export async function cmdInit(): Promise<void> {
       default: "done",
     }))
     await notify({ state, tool: "agent-notify-setup", cwd: process.cwd() })
-    console.log("Test notification sent.")
+    console.log("Test notification sent. If it didn't appear, run: agent-notify doctor")
   }
 
   console.log("\nSetup complete.")

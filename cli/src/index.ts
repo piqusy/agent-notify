@@ -2,6 +2,7 @@
 import { notify, BUILTIN_SOUNDS } from "@agent-notify/core";
 import { ExitPromptError } from "@inquirer/core";
 import { cmdInit } from "./commands/init.js";
+import { cmdDoctor } from "./commands/doctor.js";
 import { playSoundSync } from "./sounds/play.js";
 
 const [, , command, ...args] = process.argv;
@@ -16,8 +17,12 @@ async function cmdQuestion(dir?: string): Promise<void> {
 
 async function cmdTest(type?: string): Promise<void> {
   const state = type === "question" ? "question" : "done";
-  await notify({ state, tool: "agent-notify-test", cwd: process.cwd() });
-  console.log(`Sent test notification: ${state}`);
+  const result = await notify({ state, tool: "agent-notify-test", cwd: process.cwd() });
+  if (result.sent) {
+    console.log(`Sent test notification: ${state}`);
+  } else {
+    console.log(`Notification suppressed (${result.reason}). Run "agent-notify doctor" for diagnostics.`);
+  }
 }
 
 function cmdSounds(subArgs: string[]): void {
@@ -52,6 +57,7 @@ Usage:
   agent-notify sounds                List available notification sounds
   agent-notify sounds --play <name>  Play a sound by name
   agent-notify init                  Interactive setup wizard
+  agent-notify doctor                Run diagnostics
   agent-notify --help                Show this help
 `);
 }
@@ -72,6 +78,9 @@ async function main(): Promise<void> {
       break;
     case "init":
       await cmdInit();
+      break;
+    case "doctor":
+      await cmdDoctor();
       break;
     case "--help":
     case "-h":
