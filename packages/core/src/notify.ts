@@ -11,7 +11,8 @@ import { sendNotification } from "./platform/index.js"
 
 export type { NotifyInput }
 
-export function isQuietHour(quietHours: QuietHours): boolean {
+export function isQuietHour(quietHours: QuietHours | null): boolean {
+  if (quietHours === null) return false
   const now = new Date()
   const hour = now.getHours()
   const { start, end } = quietHours
