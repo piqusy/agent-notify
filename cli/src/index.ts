@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+declare const __CLI_VERSION__: string
 import { notify, BUILTIN_SOUNDS } from "@agent-notify/core";
 import { ExitPromptError } from "@inquirer/core";
 import { cmdInit } from "./commands/init.js";
@@ -86,6 +87,10 @@ async function main(): Promise<void> {
     case "-h":
     case undefined:
       printHelp();
+      break;
+    case "--version":
+    case "-v":
+      console.log(__CLI_VERSION__);
       break;
     default:
       console.error(`Unknown command: ${command}`);
