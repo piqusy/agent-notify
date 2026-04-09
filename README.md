@@ -107,6 +107,37 @@ The `opencode-agent-notify` plugin is added to `~/.config/opencode/opencode.json
 - [bun](https://bun.sh) (for source install only — Homebrew install is standalone)
 - [terminal-notifier](https://github.com/julienXX/terminal-notifier) (optional, for richer notifications — `brew install terminal-notifier`)
 
+## Troubleshooting
+
+Run the built-in diagnostic tool:
+
+```sh
+agent-notify doctor
+```
+
+It checks config validity, backend detection, notification permissions, focus state, quiet hours, and sound files in one pass.
+
+### No notifications appear
+
+- **macOS notification permissions** — the most common issue. Open **System Settings → Notifications → terminal-notifier** and enable **Allow Notifications**. Set the alert style to **Banners** or **Alerts**.
+- **Backend not installed** — if using `terminal-notifier` (recommended), install it: `brew install terminal-notifier`.
+- **Focus detection** — if your terminal is the frontmost app, notifications are suppressed by design. Switch to another app or set `"terminalApp": null` in config to disable focus detection entirely.
+
+### No sound
+
+- Check that **Sounds** is toggled on in **System Settings → Notifications → terminal-notifier**.
+- Check that your system volume is not muted.
+- Verify your sound config refers to a valid built-in name: `agent-notify sounds`.
+- During quiet hours, sounds are muted (notifications still appear silently).
+
+### macOS Sequoia (15.x)
+
+Sequoia restricts some notification APIs. Use `terminal-notifier` as the backend — `osascript` notifications may not work. Install it with `brew install terminal-notifier`.
+
+### "Sent test notification" but nothing appeared
+
+The `test` command now reports whether the notification was actually sent or suppressed (and why). If you see `Notification suppressed (reason)`, the notification was intentionally skipped — run `agent-notify doctor` to understand why.
+
 ## License
 
 MIT © [Ivan Ramljak](https://github.com/piqusy)
