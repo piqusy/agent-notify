@@ -21,7 +21,7 @@ export interface EventFilter {
 
 export interface Config {
   cooldownSeconds: number
-  quietHours:      QuietHours
+  quietHours:      QuietHours | null   // null = quiet hours disabled entirely
   sounds:          SoundConfig
   events:          EventFilter
   terminalApp:     string | null   // null = auto-detect via TERM_PROGRAM
