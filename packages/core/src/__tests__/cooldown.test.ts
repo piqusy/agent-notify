@@ -8,11 +8,11 @@ const tmpFile = (name: string) => join(tmpdir(), `agent-notify-cooldown-test-${n
 
 describe("cooldownFilePath", () => {
   it("replaces spaces with hyphens", () => {
-    expect(cooldownFilePath("My Tool")).toBe("/tmp/agent-notify-cooldown-My-Tool")
+    expect(cooldownFilePath("My Tool")).toBe(join(tmpdir(), "agent-notify-cooldown-My-Tool"))
   })
 
   it("leaves names without spaces unchanged", () => {
-    expect(cooldownFilePath("OpenCode")).toBe("/tmp/agent-notify-cooldown-OpenCode")
+    expect(cooldownFilePath("OpenCode")).toBe(join(tmpdir(), "agent-notify-cooldown-OpenCode"))
   })
 })
 
