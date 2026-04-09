@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.8] — 2026-04-10
+
+### Fixed
+- `-v`/`--version` now works in the compiled standalone binary — replaced tsup `define` injection with a `version.ts` module that is resolved correctly by both `tsup` and `bun build --compile`
+
 ## [0.1.7] — 2026-04-10
 
 ### Added
