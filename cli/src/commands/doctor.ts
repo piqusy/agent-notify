@@ -191,12 +191,16 @@ export async function cmdDoctor(): Promise<void> {
   }
 
   // 6. Quiet hours
-  const quiet = isQuietHour(config.quietHours)
-  const hour = new Date().getHours()
-  if (quiet) {
-    line(WARN, "Quiet hours", `Active (${config.quietHours.start}:00–${config.quietHours.end}:00, current: ${hour}:00) — sounds muted`)
+  if (config.quietHours === null) {
+    line(OK, "Quiet hours", "Disabled")
   } else {
-    line(OK, "Quiet hours", `Inactive (${config.quietHours.start}:00–${config.quietHours.end}:00, current: ${hour}:00)`)
+    const quiet = isQuietHour(config.quietHours)
+    const hour = new Date().getHours()
+    if (quiet) {
+      line(WARN, "Quiet hours", `Active (${config.quietHours.start}:00–${config.quietHours.end}:00, current: ${hour}:00) — sounds muted`)
+    } else {
+      line(OK, "Quiet hours", `Inactive (${config.quietHours.start}:00–${config.quietHours.end}:00, current: ${hour}:00)`)
+    }
   }
 
   // 7. Events
