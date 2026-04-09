@@ -99,7 +99,8 @@ The `opencode-agent-notify` plugin is added to `~/.config/opencode/opencode.json
 
 `terminalApp: null` — auto-detected via `$TERM_PROGRAM`. Set to e.g. `"iTerm2"` to override.  
 `backend: null` — auto-detected (prefers `terminal-notifier` if installed, falls back to `osascript`).  
-`sounds.permission: null` — falls back to the question sound.
+`sounds.permission: null` — falls back to the question sound.  
+`quietHours: null` — disables quiet hours entirely (sounds play at all times).
 
 ## Requirements
 
