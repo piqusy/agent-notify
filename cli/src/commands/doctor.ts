@@ -66,13 +66,27 @@ function checkNotificationPermission(): { enabled: boolean | null; detail: strin
       const idx = raw.indexOf(bundleId)
       if (idx === -1) continue
 
-      // Find the "flags" value near this bundle ID entry
-      const chunk = raw.slice(Math.max(0, idx - 200), idx + 500)
-      const flagsMatch = chunk.match(/flags\s*=\s*(\d+)/)
-      if (!flagsMatch) continue
+      // The plist entry looks like:
+      //   "bundle-id" = "...terminal-notifier";
+      //   flags = <top-level, layout varies by macOS version>;
+      //   src = (
+      //       {
+      //       flags = 1;   ← bit 0 here reliably means "notifications enabled"
+      //       ...
+      //       }
+      //   );
+      // We target the flags inside the src block, not the top-level flags,
+      // because the top-level flags bitmask layout is undocumented and changes
+      // across macOS versions.
+      const chunk = raw.slice(idx, idx + 800)
+      const srcBlockMatch = chunk.match(/\bsrc\s*=\s*\([\s\S]*?flags\s*=\s*(\d+)/)
+      if (!srcBlockMatch) {
+        // Fallback: no src block found — entry exists but state is unknown
+        return { enabled: null, detail: `terminal-notifier found but permission state unclear (bundle: ${bundleId})` }
+      }
 
-      const flags = parseInt(flagsMatch[1], 10)
-      // Bit 0: notifications enabled
+      const flags = parseInt(srcBlockMatch[1], 10)
+      // Bit 0 of src[].flags: 1 = notifications enabled
       const enabled = (flags & 1) === 1
       return {
         enabled,
