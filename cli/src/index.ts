@@ -17,7 +17,7 @@ async function cmdQuestion(dir?: string): Promise<void> {
 
 async function cmdTest(type?: string): Promise<void> {
   const state = type === "question" ? "question" : "done";
-  const result = await notify({ state, tool: "agent-notify-test", cwd: process.cwd() });
+  const result = await notify({ state, tool: "agent-notify-test", cwd: process.cwd(), skipFocusCheck: true });
   if (result.sent) {
     console.log(`Sent test notification: ${state}`);
   } else {

@@ -35,10 +35,11 @@ export interface NotifyPayload {
 }
 
 export interface NotifyInput {
-  state:    NotifyState
-  trigger?: "done" | "question" | "permission"  // if omitted, falls back to state
-  tool:     string
-  cwd?:     string
+  state:            NotifyState
+  trigger?:         "done" | "question" | "permission"  // if omitted, falls back to state
+  tool:             string
+  cwd?:             string
+  skipFocusCheck?:  boolean   // when true, bypasses the terminal-focused suppression
 }
 
 export type NotifySkipReason =

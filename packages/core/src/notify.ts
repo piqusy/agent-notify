@@ -45,15 +45,17 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
   if (!config.events[eventKey]) return { sent: false, reason: "event-disabled" }
 
   // 2. Focus check — auto-detect terminal when terminalApp is null
-  const termApp = config.terminalApp ?? resolveTerminalApp(process.env.TERM_PROGRAM ?? "")
-  if (termApp !== null && await isTerminalFocused(termApp)) {
-    if (isZellijSession()) {
-      // Inside Zellij: only suppress if our tab is the active (visible) one
-      if (await isPaneTabActive()) return { sent: false, reason: "terminal-focused" }
-      // Tab not active — user is on a different tab, so notify
-    } else {
-      // No multiplexer: terminal focused = user is looking at it, suppress
-      return { sent: false, reason: "terminal-focused" }
+  if (!input.skipFocusCheck) {
+    const termApp = config.terminalApp ?? resolveTerminalApp(process.env.TERM_PROGRAM ?? "")
+    if (termApp !== null && await isTerminalFocused(termApp)) {
+      if (isZellijSession()) {
+        // Inside Zellij: only suppress if our tab is the active (visible) one
+        if (await isPaneTabActive()) return { sent: false, reason: "terminal-focused" }
+        // Tab not active — user is on a different tab, so notify
+      } else {
+        // No multiplexer: terminal focused = user is looking at it, suppress
+        return { sent: false, reason: "terminal-focused" }
+      }
     }
   }
 
