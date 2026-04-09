@@ -7,6 +7,7 @@ import {
   defaultConfigPath,
   notify,
   TERM_PROGRAM_MAP,
+  resolveTerminalApp,
 } from "@agent-notify/core"
 import type { Config, NotifyBackend } from "@agent-notify/core"
 import { ask } from "../prompts/cancel.js"
@@ -195,6 +196,17 @@ export async function cmdInit(): Promise<void> {
   // --- Review ---
   console.log("\nConfig to be written:")
   console.log(JSON.stringify(config, null, 2))
+
+  // Show helpful hints for null values that will be auto-resolved at runtime
+  const hints: string[] = []
+  if (config.terminalApp === null) {
+    const resolved = resolveTerminalApp(process.env.TERM_PROGRAM ?? "")
+    if (resolved) hints.push(`  terminalApp: null → will auto-detect as "${resolved}" at runtime`)
+  }
+  if (config.quietHours === null) {
+    hints.push("  quietHours: null → quiet hours disabled, sounds play at all times")
+  }
+  if (hints.length > 0) console.log(hints.join("\n"))
 
   const proceed = await ask(confirm({ message: "Write config?", default: true }))
   if (!proceed) {
