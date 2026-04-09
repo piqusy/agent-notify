@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.7] — 2026-04-10
+
+### Added
+- `agent-notify -v` / `--version` prints the current version
+
+### Fixed
+- `agent-notify test` and the init wizard test send no longer get suppressed when the terminal is frontmost (`skipFocusCheck` added to `NotifyInput`)
+- `agent-notify init`: answering No to "Enable quiet hours?" now correctly writes `"quietHours": null` instead of keeping the default 22–8 range
+- `agent-notify init`: config preview now shows what `terminalApp: null` will auto-resolve to at runtime, and confirms when quiet hours are disabled
+
 ## [0.1.6] — 2026-04-10
 
 ### Fixed
