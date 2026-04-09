@@ -1,6 +1,6 @@
 import { execSync } from "node:child_process"
 import * as path from "node:path"
-import type { Config, NotifyPayload, QuietHours } from "./types.js"
+import type { Config, NotifyPayload, NotifyResult, QuietHours } from "./types.js"
 import type { NotifyInput } from "./types.js"
 import { loadConfig } from "./config.js"
 import { checkAndUpdateCooldown, cooldownFilePath } from "./cooldown.js"
@@ -36,30 +36,30 @@ function getGitBranch(cwd: string): string | null {
   }
 }
 
-export async function notify(input: NotifyInput): Promise<void> {
+export async function notify(input: NotifyInput): Promise<NotifyResult> {
   const config: Config = await loadConfig()
 
   // 1. Event filter — use trigger if provided, otherwise fall back to state
   const eventKey = input.trigger ?? input.state
-  if (!config.events[eventKey]) return
+  if (!config.events[eventKey]) return { sent: false, reason: "event-disabled" }
 
   // 2. Focus check — auto-detect terminal when terminalApp is null
   const termApp = config.terminalApp ?? resolveTerminalApp(process.env.TERM_PROGRAM ?? "")
   if (termApp !== null && await isTerminalFocused(termApp)) {
     if (isZellijSession()) {
       // Inside Zellij: only suppress if our tab is the active (visible) one
-      if (await isPaneTabActive()) return
+      if (await isPaneTabActive()) return { sent: false, reason: "terminal-focused" }
       // Tab not active — user is on a different tab, so notify
     } else {
       // No multiplexer: terminal focused = user is looking at it, suppress
-      return
+      return { sent: false, reason: "terminal-focused" }
     }
   }
 
   // 3. Cooldown — checkAndUpdateCooldown returns false if on cooldown
   const file = cooldownFilePath(input.tool)
   const shouldProceed = await checkAndUpdateCooldown(file, config.cooldownSeconds)
-  if (!shouldProceed) return
+  if (!shouldProceed) return { sent: false, reason: "cooldown" }
 
   // 4. Git context
   const cwd = input.cwd ?? process.cwd()
@@ -86,4 +86,5 @@ export async function notify(input: NotifyInput): Promise<void> {
 
   // 6. Send
   await sendNotification(payload, config)
+  return { sent: true }
 }

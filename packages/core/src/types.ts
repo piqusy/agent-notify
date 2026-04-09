@@ -40,3 +40,13 @@ export interface NotifyInput {
   tool:     string
   cwd?:     string
 }
+
+export type NotifySkipReason =
+  | "event-disabled"
+  | "terminal-focused"
+  | "cooldown"
+
+export interface NotifyResult {
+  sent:    boolean
+  reason?: NotifySkipReason
+}
