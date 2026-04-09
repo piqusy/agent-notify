@@ -4,7 +4,7 @@ import type { Config, NotifyPayload, QuietHours } from "./types.js"
 import type { NotifyInput } from "./types.js"
 import { loadConfig } from "./config.js"
 import { checkAndUpdateCooldown, cooldownFilePath } from "./cooldown.js"
-import { isTerminalFocused } from "./focus.js"
+import { isTerminalFocused, resolveTerminalApp } from "./focus.js"
 import { resolveSound } from "./sounds.js"
 import { sendNotification } from "./platform/index.js"
 
@@ -42,9 +42,10 @@ export async function notify(input: NotifyInput): Promise<void> {
   const eventKey = input.trigger ?? input.state
   if (!config.events[eventKey]) return
 
-  // 2. Focus check — skip if terminal app is null (no app to check)
-  if (config.terminalApp !== null) {
-    if (await isTerminalFocused(config.terminalApp)) return
+  // 2. Focus check — auto-detect terminal when terminalApp is null
+  const termApp = config.terminalApp ?? resolveTerminalApp(process.env.TERM_PROGRAM ?? "")
+  if (termApp !== null) {
+    if (await isTerminalFocused(termApp)) return
   }
 
   // 3. Cooldown — checkAndUpdateCooldown returns false if on cooldown

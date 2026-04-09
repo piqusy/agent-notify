@@ -39,13 +39,14 @@ describe("resolveTerminalApp", () => {
 
 describe("TERM_PROGRAM_MAP", () => {
   it("covers common terminals", () => {
-    expect(TERM_PROGRAM_MAP).toHaveProperty("ghostty")
-    expect(TERM_PROGRAM_MAP).toHaveProperty("iTerm.app")
-    expect(TERM_PROGRAM_MAP).toHaveProperty("WarpTerminal")
-    expect(TERM_PROGRAM_MAP).toHaveProperty("alacritty")
-    expect(TERM_PROGRAM_MAP).toHaveProperty("kitty")
-    expect(TERM_PROGRAM_MAP).toHaveProperty("hyper")
-    expect(TERM_PROGRAM_MAP).toHaveProperty("Apple_Terminal")
+    const keys = Object.keys(TERM_PROGRAM_MAP)
+    expect(keys).toContain("ghostty")
+    expect(keys).toContain("iTerm.app")
+    expect(keys).toContain("WarpTerminal")
+    expect(keys).toContain("alacritty")
+    expect(keys).toContain("kitty")
+    expect(keys).toContain("hyper")
+    expect(keys).toContain("Apple_Terminal")
   })
 })
 
