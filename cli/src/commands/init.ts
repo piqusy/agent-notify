@@ -110,7 +110,7 @@ export async function cmdInit(): Promise<void> {
     default: true,
   }))
 
-  let quietHours = defaultConfig.quietHours
+  let quietHours: typeof defaultConfig.quietHours | null = defaultConfig.quietHours
   if (quietHoursEnabled) {
     const startStr = await ask(input({
       message: "Quiet hours start (0–23)",
@@ -129,6 +129,8 @@ export async function cmdInit(): Promise<void> {
       },
     }))
     quietHours = { start: parseInt(startStr, 10), end: parseInt(endStr, 10) }
+  } else {
+    quietHours = null
   }
 
   // --- Sounds ---
