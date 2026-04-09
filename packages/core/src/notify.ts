@@ -5,6 +5,7 @@ import type { NotifyInput } from "./types.js"
 import { loadConfig } from "./config.js"
 import { checkAndUpdateCooldown, cooldownFilePath } from "./cooldown.js"
 import { isTerminalFocused, resolveTerminalApp } from "./focus.js"
+import { isZellijSession, isPaneTabActive } from "./zellij.js"
 import { resolveSound } from "./sounds.js"
 import { sendNotification } from "./platform/index.js"
 
@@ -44,8 +45,15 @@ export async function notify(input: NotifyInput): Promise<void> {
 
   // 2. Focus check — auto-detect terminal when terminalApp is null
   const termApp = config.terminalApp ?? resolveTerminalApp(process.env.TERM_PROGRAM ?? "")
-  if (termApp !== null) {
-    if (await isTerminalFocused(termApp)) return
+  if (termApp !== null && await isTerminalFocused(termApp)) {
+    if (isZellijSession()) {
+      // Inside Zellij: only suppress if our tab is the active (visible) one
+      if (await isPaneTabActive()) return
+      // Tab not active — user is on a different tab, so notify
+    } else {
+      // No multiplexer: terminal focused = user is looking at it, suppress
+      return
+    }
   }
 
   // 3. Cooldown — checkAndUpdateCooldown returns false if on cooldown
