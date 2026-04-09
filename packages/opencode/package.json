@@ -1,6 +1,6 @@
 {
   "name": "opencode-agent-notify",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "OpenCode plugin for agent-notify notifications",
   "type": "module",
   "main": "./dist/index.js",
@@ -26,6 +26,10 @@
       "optional": true
     }
   },
-  "keywords": ["opencode", "notifications", "agent-notify"],
+  "keywords": [
+    "opencode",
+    "notifications",
+    "agent-notify"
+  ],
   "license": "MIT"
 }

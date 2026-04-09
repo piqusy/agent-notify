@@ -1,6 +1,6 @@
 {
   "name": "agent-notify-cli",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "CLI for agent-notify notifications",
   "type": "module",
   "bin": {
@@ -19,6 +19,10 @@
     "@inquirer/type": "4.0.5",
     "yoctocolors-cjs": "2.1.3"
   },
-  "keywords": ["agent-notify", "cli", "notifications"],
+  "keywords": [
+    "agent-notify",
+    "cli",
+    "notifications"
+  ],
   "license": "MIT"
 }
