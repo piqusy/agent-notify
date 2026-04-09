@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.6] — 2026-04-10
+
+### Fixed
+- `doctor`: notification permission check now reads `src[].flags` instead of the top-level `flags` field in `com.apple.ncprefs`, which has an undocumented bitmask layout that varies across macOS versions and produced false DISABLED results
+- `quietHours` can now be set to `null` in config to disable quiet hours entirely; previously there was no opt-out and the default 22:00–8:00 window could not be removed
+
 ## [0.1.5] — 2026-04-10
 
 ### Added
