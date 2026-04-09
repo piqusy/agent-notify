@@ -1,5 +1,4 @@
 import { defineConfig } from "tsup"
-import pkg from "./package.json"
 
 export default defineConfig({
   entry:    ["src/index.ts"],
@@ -8,5 +7,4 @@ export default defineConfig({
   dts:      false,
   clean:    true,
   external: ["@agent-notify/core"],
-  define:   { __CLI_VERSION__: JSON.stringify(pkg.version) },
 })

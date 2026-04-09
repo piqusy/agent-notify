@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-declare const __CLI_VERSION__: string
 import { notify, BUILTIN_SOUNDS } from "@agent-notify/core";
 import { ExitPromptError } from "@inquirer/core";
 import { cmdInit } from "./commands/init.js";
 import { cmdDoctor } from "./commands/doctor.js";
 import { playSoundSync } from "./sounds/play.js";
+import { CLI_VERSION } from "./version.js";
 
 const [, , command, ...args] = process.argv;
 
@@ -60,6 +60,7 @@ Usage:
   agent-notify init                  Interactive setup wizard
   agent-notify doctor                Run diagnostics
   agent-notify --help                Show this help
+  agent-notify --version             Show version
 `);
 }
 
@@ -90,7 +91,7 @@ async function main(): Promise<void> {
       break;
     case "--version":
     case "-v":
-      console.log(__CLI_VERSION__);
+      console.log(CLI_VERSION);
       break;
     default:
       console.error(`Unknown command: ${command}`);
