@@ -8,7 +8,7 @@ INPUT=$(cat)
 CWD=$(echo "$INPUT" | jq -r '.cwd // empty' 2>/dev/null || echo "")
 
 if [ -n "$CWD" ]; then
-  agent-notify done "$CWD" 2>/dev/null || true
+  agent-notify done "$CWD" --tool claude-code 2>/dev/null || true
 else
-  agent-notify done 2>/dev/null || true
+  agent-notify done --tool claude-code 2>/dev/null || true
 fi

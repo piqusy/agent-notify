@@ -7,7 +7,7 @@ INPUT=$(cat)
 CWD=$(echo "$INPUT" | jq -r '.cwd // empty' 2>/dev/null || echo "")
 
 if [ -n "$CWD" ]; then
-  agent-notify question "$CWD" 2>/dev/null || true
+  agent-notify question "$CWD" --tool claude-code 2>/dev/null || true
 else
-  agent-notify question 2>/dev/null || true
+  agent-notify question --tool claude-code 2>/dev/null || true
 fi

@@ -45,7 +45,7 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
   if (!config.events[eventKey]) return { sent: false, reason: "event-disabled" }
 
   // 2. Focus check — auto-detect terminal when terminalApp is null
-  if (!input.skipFocusCheck) {
+  if (!input.skipFocusCheck && !input.force) {
     const termApp = config.terminalApp ?? resolveTerminalApp(process.env.TERM_PROGRAM ?? "")
     if (termApp !== null && await isTerminalFocused(termApp)) {
       if (isZellijSession()) {
@@ -61,7 +61,7 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
 
   // 3. Cooldown — checkAndUpdateCooldown returns false if on cooldown
   const file = cooldownFilePath(input.tool)
-  const shouldProceed = await checkAndUpdateCooldown(file, config.cooldownSeconds)
+  const shouldProceed = input.force || await checkAndUpdateCooldown(file, config.cooldownSeconds)
   if (!shouldProceed) return { sent: false, reason: "cooldown" }
 
   // 4. Git context
@@ -70,8 +70,16 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
   const branch = getGitBranch(cwd)
 
   // 5. Build payload
+  const TOOL_DISPLAY_NAMES: Record<string, string> = {
+    cli: "CLI",
+    opencode: "OpenCode",
+    "claude-code": "Claude Code",
+    test: "Test",
+  }
+  const displayName = TOOL_DISPLAY_NAMES[input.tool]
+    ?? input.tool.charAt(0).toUpperCase() + input.tool.slice(1)
   const stateLabel = input.state === "done" ? "Done" : "Question"
-  const title = `${input.tool} — ${stateLabel}`
+  const title = `${displayName} — ${stateLabel}`
   const body = branch ? `${project} · ${branch}` : project
 
   const sound = isQuietHour(config.quietHours)

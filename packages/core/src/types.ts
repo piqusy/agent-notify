@@ -40,6 +40,7 @@ export interface NotifyInput {
   tool:             string
   cwd?:             string
   skipFocusCheck?:  boolean   // when true, bypasses the terminal-focused suppression
+  force?:           boolean   // when true, bypasses focus AND cooldown checks
 }
 
 export type NotifySkipReason =

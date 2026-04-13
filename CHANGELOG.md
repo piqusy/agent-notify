@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.9] — 2026-04-13
+
+### Added
+- Notification title now shows the AI tool name instead of the CLI package name (e.g. `OpenCode — Done`, `Claude Code — Question`)
+- `--tool <name>` flag on `done`/`question` commands for per-integration display names
+- `force` option on `NotifyInput` bypasses both focus and cooldown checks
+- `--force`/`-f` flag on `test` command for testing from a focused terminal
+
 ## [0.1.8] — 2026-04-10
 
 ### Fixed

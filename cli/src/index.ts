@@ -8,19 +8,34 @@ import { CLI_VERSION } from "./version.js";
 
 const [, , command, ...args] = process.argv;
 
-async function cmdDone(dir?: string): Promise<void> {
-  await notify({ state: "done", tool: "agent-notify-cli", cwd: dir ?? process.cwd() });
+function parseToolFlag(args: string[]): { tool: string; rest: string[] } {
+  const idx = args.indexOf("--tool");
+  if (idx !== -1 && args[idx + 1]) {
+    const rest = args.filter((_, i) => i !== idx && i !== idx + 1);
+    return { tool: args[idx + 1], rest };
+  }
+  return { tool: "cli", rest: args };
 }
 
-async function cmdQuestion(dir?: string): Promise<void> {
-  await notify({ state: "question", tool: "agent-notify-cli", cwd: dir ?? process.cwd() });
+async function cmdDone(rawArgs: string[]): Promise<void> {
+  const { tool, rest } = parseToolFlag(rawArgs);
+  const dir = rest[0];
+  await notify({ state: "done", tool, cwd: dir ?? process.cwd() });
 }
 
-async function cmdTest(type?: string): Promise<void> {
+async function cmdQuestion(rawArgs: string[]): Promise<void> {
+  const { tool, rest } = parseToolFlag(rawArgs);
+  const dir = rest[0];
+  await notify({ state: "question", tool, cwd: dir ?? process.cwd() });
+}
+
+async function cmdTest(subArgs: string[]): Promise<void> {
+  const type = subArgs.find((a) => !a.startsWith("-"));
+  const force = subArgs.includes("--force") || subArgs.includes("-f");
   const state = type === "question" ? "question" : "done";
-  const result = await notify({ state, tool: "agent-notify-test", cwd: process.cwd(), skipFocusCheck: true });
+  const result = await notify({ state, tool: "test", cwd: process.cwd(), force });
   if (result.sent) {
-    console.log(`Sent test notification: ${state}`);
+    console.log(`Sent test notification: ${state}${force ? " (forced)" : ""}`);
   } else {
     console.log(`Notification suppressed (${result.reason}). Run "agent-notify doctor" for diagnostics.`);
   }
@@ -52,9 +67,9 @@ function printHelp(): void {
   console.log(`agent-notify — send desktop notifications from AI agents
 
 Usage:
-  agent-notify done [dir]           Send a "done" notification
-  agent-notify question [dir]       Send a "question/waiting" notification
-  agent-notify test [done|question] Send a test notification
+  agent-notify done [dir] [--tool <name>]           Send a "done" notification
+  agent-notify question [dir] [--tool <name>]       Send a "question/waiting" notification
+  agent-notify test [done|question] [--force|-f]    Send a test notification (--force bypasses focus/cooldown)
   agent-notify sounds                List available notification sounds
   agent-notify sounds --play <name>  Play a sound by name
   agent-notify init                  Interactive setup wizard
@@ -67,13 +82,13 @@ Usage:
 async function main(): Promise<void> {
   switch (command) {
     case "done":
-      await cmdDone(args[0]);
+      await cmdDone(args);
       break;
     case "question":
-      await cmdQuestion(args[0]);
+      await cmdQuestion(args);
       break;
     case "test":
-      await cmdTest(args[0]);
+      await cmdTest(args);
       break;
     case "sounds":
       cmdSounds(args);
