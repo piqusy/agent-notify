@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.14] — 2026-04-14
+
+### Fixed
+- Revert per-arch runners — `macos-13` is retired; both arches build on `macos-latest` with Bun 1.3.9 (codesign works for both arm64 and x64 on arm64 host with this version)
+
 ## [0.1.13] — 2026-04-14
 
 ### Fixed
