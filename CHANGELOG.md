@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.12] — 2026-04-14
+
+### Fixed
+- Sign each binary on its native runner (arm64 on `macos-latest`, x64 on `macos-13`) — `codesign` cannot sign cross-arch binaries
+
 ## [0.1.11] — 2026-04-14
 
 ### Fixed
