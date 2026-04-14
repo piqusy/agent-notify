@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.11] — 2026-04-14
+
+### Fixed
+- Remove `--preserve-metadata` from `codesign` step — flag errors on unsigned binaries with no existing metadata
+
 ## [0.1.10] — 2026-04-14
 
 ### Fixed

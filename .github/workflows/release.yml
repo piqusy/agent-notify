@@ -43,7 +43,7 @@ jobs:
             --target ${{ matrix.bun_target }}
 
       - name: Ad-hoc sign binary (${{ matrix.arch }})
-        run: codesign --sign - --force --preserve-metadata=entitlements,requirements,flags,runtime dist/${{ matrix.outfile }}
+        run: codesign --sign - --force dist/${{ matrix.outfile }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
