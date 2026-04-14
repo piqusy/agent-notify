@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.13] — 2026-04-14
+
+### Fixed
+- Pin Bun to `1.3.9` in release workflow — `1.3.10+` produces binaries that `codesign` rejects with "invalid or unsupported format"
+
 ## [0.1.12] — 2026-04-14
 
 ### Fixed
