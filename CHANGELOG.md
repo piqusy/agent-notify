@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.10] — 2026-04-14
+
+### Fixed
+- Ad-hoc codesign compiled binary in release workflow to prevent macOS Gatekeeper SIGKILL (exit 137)
+
 ## [0.1.9] — 2026-04-13
 
 ### Added
