@@ -19,8 +19,9 @@ class AgentNotify < Formula
   end
 
   def install
-    binary = Hardware::CPU.arm? ? "agent-notify-darwin-arm64" : "agent-notify-darwin-x64"
-    bin.install binary => "agent-notify"
+    bundle = Hardware::CPU.arm? ? "agent-notify-darwin-arm64" : "agent-notify-darwin-x64"
+    bin.install "#{bundle}/bin/agent-notify"
+    libexec.install "#{bundle}/opencode-agent-notify"
   end
 
   test do

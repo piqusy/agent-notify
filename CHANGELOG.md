@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.15] — 2026-04-19
+
+### Fixed
+- Stop OpenCode from resolving `opencode-agent-notify` through npm; installer now rewrites config to Homebrew local plugin path and release bundle ships plugin under `libexec`
+
 ## [0.1.14] — 2026-04-14
 
 ### Fixed

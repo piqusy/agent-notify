@@ -159,20 +159,50 @@ header "OpenCode plugin"
 OPENCODE_CONFIG="$HOME/.config/opencode/opencode.json"
 PLUGIN_NAME="opencode-agent-notify"
 
+resolve_opencode_plugin_path() {
+  local brew_prefix plugin_path
+
+  if command -v brew &>/dev/null; then
+    brew_prefix=$(brew --prefix agent-notify 2>/dev/null || true)
+    if [ -n "$brew_prefix" ]; then
+      plugin_path="$brew_prefix/libexec/opencode-agent-notify"
+      if [ -d "$plugin_path" ]; then
+        printf '%s\n' "$plugin_path"
+        return 0
+      fi
+    fi
+  fi
+
+  plugin_path="$REPO_DIR/packages/opencode"
+  if [ -d "$plugin_path" ]; then
+    printf '%s\n' "$plugin_path"
+    return 0
+  fi
+
+  return 1
+}
+
+OPENCODE_PLUGIN_PATH="$(resolve_opencode_plugin_path || true)"
+
 if [ ! -f "$OPENCODE_CONFIG" ]; then
   warn "OpenCode config not found at $OPENCODE_CONFIG"
   info "OpenCode is not installed, or config doesn't exist yet."
-  info "To wire the plugin manually, add \"$PLUGIN_NAME\" to the \"plugin\" array"
+  info "To wire the plugin manually, add \"$OPENCODE_PLUGIN_PATH\" to the \"plugin\" array"
   info "in $OPENCODE_CONFIG"
 else
-  # Check if already present
-  if jq -e --arg p "$PLUGIN_NAME" '.plugin | index($p) != null' "$OPENCODE_CONFIG" &>/dev/null 2>&1; then
+  # Replace legacy package-name entry or append local path.
+  if jq -e --arg p "$OPENCODE_PLUGIN_PATH" '.plugin | index($p) != null' "$OPENCODE_CONFIG" &>/dev/null 2>&1; then
     ok "OpenCode plugin already configured"
+  elif jq -e --arg legacy "$PLUGIN_NAME" '.plugin | index($legacy) != null' "$OPENCODE_CONFIG" &>/dev/null 2>&1; then
+    tmp=$(mktemp)
+    jq --arg legacy "$PLUGIN_NAME" --arg p "$OPENCODE_PLUGIN_PATH" '.plugin = (.plugin | map(if . == $legacy then $p else . end))' \
+      "$OPENCODE_CONFIG" > "$tmp" && mv "$tmp" "$OPENCODE_CONFIG"
+    ok "Replaced legacy OpenCode plugin entry with \"$OPENCODE_PLUGIN_PATH\""
   else
     tmp=$(mktemp)
-    jq --arg p "$PLUGIN_NAME" '.plugin = ((.plugin // []) + [$p])' \
+    jq --arg p "$OPENCODE_PLUGIN_PATH" '.plugin = ((.plugin // []) + [$p])' \
       "$OPENCODE_CONFIG" > "$tmp" && mv "$tmp" "$OPENCODE_CONFIG"
-    ok "Added \"$PLUGIN_NAME\" to OpenCode plugins"
+    ok "Added \"$OPENCODE_PLUGIN_PATH\" to OpenCode plugins"
   fi
 fi
 

@@ -72,7 +72,7 @@ Hooks are configured in `~/.claude/settings.json`. After running `./install.sh` 
 
 ## OpenCode
 
-The `opencode-agent-notify` plugin is added to `~/.config/opencode/opencode.json` automatically by `install.sh`. It listens to `session.idle` and `permission.updated` events.
+`install.sh` adds local plugin path to `~/.config/opencode/opencode.json` automatically and replaces old bare `opencode-agent-notify` entries. It listens to `session.idle` and `permission.updated` events.
 
 ## Configuration
 

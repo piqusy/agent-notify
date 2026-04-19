@@ -37,13 +37,20 @@ jobs:
 
       - name: Compile standalone binary (${{ matrix.arch }})
         run: |
+          mkdir -p dist/${{ matrix.outfile }}/bin
           bun build cli/src/index.ts \
             --compile \
-            --outfile dist/${{ matrix.outfile }} \
+            --outfile dist/${{ matrix.outfile }}/bin/agent-notify \
             --target ${{ matrix.bun_target }}
 
       - name: Ad-hoc sign binary (${{ matrix.arch }})
-        run: codesign --sign - --force dist/${{ matrix.outfile }}
+        run: codesign --sign - --force dist/${{ matrix.outfile }}/bin/agent-notify
+
+      - name: Stage OpenCode plugin bundle (${{ matrix.arch }})
+        run: |
+          mkdir -p dist/${{ matrix.outfile }}/opencode-agent-notify
+          cp packages/opencode/package.json dist/${{ matrix.outfile }}/opencode-agent-notify/
+          cp -R packages/opencode/dist dist/${{ matrix.outfile }}/opencode-agent-notify/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -64,11 +71,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: dist/
-
-      - name: Flatten artifacts into dist/
-        run: |
-          find dist/ -mindepth 2 -type f -exec mv {} dist/ \;
-          find dist/ -empty -type d -delete
 
       - name: Create tarballs
         run: |
