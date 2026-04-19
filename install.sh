@@ -157,6 +157,7 @@ fi
 header "OpenCode plugin"
 
 OPENCODE_CONFIG="$HOME/.config/opencode/opencode.json"
+OPENCODE_PLUGIN_DIR="$HOME/.config/opencode/plugins/opencode-agent-notify"
 PLUGIN_NAME="opencode-agent-notify"
 
 resolve_opencode_plugin_path() {
@@ -165,16 +166,16 @@ resolve_opencode_plugin_path() {
   if command -v brew &>/dev/null; then
     brew_prefix=$(brew --prefix agent-notify 2>/dev/null || true)
     if [ -n "$brew_prefix" ]; then
-      plugin_path="$brew_prefix/libexec/opencode-agent-notify"
-      if [ -d "$plugin_path" ]; then
+      plugin_path="$brew_prefix/libexec/opencode-agent-notify/dist/index.js"
+      if [ -f "$plugin_path" ]; then
         printf '%s\n' "$plugin_path"
         return 0
       fi
     fi
   fi
 
-  plugin_path="$REPO_DIR/packages/opencode"
-  if [ -d "$plugin_path" ]; then
+  plugin_path="$REPO_DIR/packages/opencode/dist/index.js"
+  if [ -f "$plugin_path" ]; then
     printf '%s\n' "$plugin_path"
     return 0
   fi
@@ -190,12 +191,26 @@ if [ ! -f "$OPENCODE_CONFIG" ]; then
   info "To wire the plugin manually, add \"$OPENCODE_PLUGIN_PATH\" to the \"plugin\" array"
   info "in $OPENCODE_CONFIG"
 else
+  OPENCODE_OLD_PLUGIN_DIR="/opt/homebrew/opt/agent-notify/libexec/opencode-agent-notify"
+  OPENCODE_OLD_PLUGIN_FILE="$OPENCODE_OLD_PLUGIN_DIR/dist/index.js"
+  OPENCODE_OLD_PLUGIN_URI="file://$OPENCODE_OLD_PLUGIN_FILE"
+
+  mkdir -p "$OPENCODE_PLUGIN_DIR"
+  cp "$REPO_DIR/packages/opencode/dist/index.js" "$OPENCODE_PLUGIN_DIR/index.js"
+  cp "$REPO_DIR/packages/opencode/dist/index.d.ts" "$OPENCODE_PLUGIN_DIR/index.d.ts"
+  ok "Copied OpenCode plugin into $OPENCODE_PLUGIN_DIR"
+
+  OPENCODE_PLUGIN_PATH="$OPENCODE_PLUGIN_DIR/index.js"
+
   # Replace legacy package-name entry or append local path.
   if jq -e --arg p "$OPENCODE_PLUGIN_PATH" '.plugin | index($p) != null' "$OPENCODE_CONFIG" &>/dev/null 2>&1; then
     ok "OpenCode plugin already configured"
-  elif jq -e --arg legacy "$PLUGIN_NAME" '.plugin | index($legacy) != null' "$OPENCODE_CONFIG" &>/dev/null 2>&1; then
+  elif jq -e --arg legacy "$PLUGIN_NAME" '.plugin | index($legacy) != null' "$OPENCODE_CONFIG" &>/dev/null 2>&1 || \
+       jq -e --arg legacy "$OPENCODE_OLD_PLUGIN_DIR" '.plugin | index($legacy) != null' "$OPENCODE_CONFIG" &>/dev/null 2>&1 || \
+       jq -e --arg legacy "$OPENCODE_OLD_PLUGIN_FILE" '.plugin | index($legacy) != null' "$OPENCODE_CONFIG" &>/dev/null 2>&1 || \
+       jq -e --arg legacy "$OPENCODE_OLD_PLUGIN_URI" '.plugin | index($legacy) != null' "$OPENCODE_CONFIG" &>/dev/null 2>&1; then
     tmp=$(mktemp)
-    jq --arg legacy "$PLUGIN_NAME" --arg p "$OPENCODE_PLUGIN_PATH" '.plugin = (.plugin | map(if . == $legacy then $p else . end))' \
+    jq --arg legacy "$PLUGIN_NAME" --arg old_dir "$OPENCODE_OLD_PLUGIN_DIR" --arg old_file "$OPENCODE_OLD_PLUGIN_FILE" --arg old_uri "$OPENCODE_OLD_PLUGIN_URI" --arg p "$OPENCODE_PLUGIN_PATH" '.plugin = ((.plugin // []) | map(select(. != $legacy and . != $old_dir and . != $old_file and . != $old_uri)) + [$p] | unique)' \
       "$OPENCODE_CONFIG" > "$tmp" && mv "$tmp" "$OPENCODE_CONFIG"
     ok "Replaced legacy OpenCode plugin entry with \"$OPENCODE_PLUGIN_PATH\""
   else
@@ -203,6 +218,15 @@ else
     jq --arg p "$OPENCODE_PLUGIN_PATH" '.plugin = ((.plugin // []) + [$p])' \
       "$OPENCODE_CONFIG" > "$tmp" && mv "$tmp" "$OPENCODE_CONFIG"
     ok "Added \"$OPENCODE_PLUGIN_PATH\" to OpenCode plugins"
+  fi
+fi
+
+if [ -f "$OPENCODE_CONFIG" ]; then
+  if jq -e --arg p "$OPENCODE_PLUGIN_PATH" '.plugin | index($p) != null' "$OPENCODE_CONFIG" &>/dev/null 2>&1; then
+    ok "Verified OpenCode loads local plugin path"
+  else
+    warn "OpenCode config still does not reference local plugin path"
+    info "Add \"$OPENCODE_PLUGIN_PATH\" to the \"plugin\" array in $OPENCODE_CONFIG"
   fi
 fi
 

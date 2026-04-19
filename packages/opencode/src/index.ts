@@ -1,51 +1,63 @@
-import { notify } from "@agent-notify/core";
-
-// OpenCode plugin — handles agent session lifecycle events
+import { notify } from "@agent-notify/core"
 
 type Session = {
-  id: string;
-  parentID?: string;
-  cwd?: string;
-};
+  id: string
+  parentID?: string
+  cwd?: string
+}
 
-type PermissionEvent = {
-  session?: Session;
-};
+type EventPayload = {
+  session?: Session
+}
 
-type SessionEvent = {
-  session?: Session;
-};
+type OpenCodePluginEvent = {
+  type: string
+  session?: Session
+}
 
-async function handleSessionDone(event: SessionEvent): Promise<void> {
-  try {
-    // Skip subagent sessions
-    if (event.session?.parentID) return;
-    await notify({
-      state: "done",
-      tool: "opencode",
-      cwd: event.session?.cwd,
-    });
-  } catch {
-    // Never crash OpenCode
+type OpenCodePlugin = () => Promise<{
+  event: (payload: { event: OpenCodePluginEvent }) => Promise<void>
+}>
+
+async function handleSessionDone(event: EventPayload): Promise<void> {
+  if (event.session?.parentID) return
+
+  await notify({
+    state: "done",
+    tool: "opencode",
+    cwd: event.session?.cwd,
+  })
+}
+
+async function handlePermission(event: EventPayload): Promise<void> {
+  if (event.session?.parentID) return
+
+  await notify({
+    state: "question",
+    trigger: "permission",
+    tool: "opencode",
+    cwd: event.session?.cwd,
+  })
+}
+
+export const OpenCodeAgentNotify: OpenCodePlugin = async () => {
+  return {
+    event: async ({ event }) => {
+      try {
+        if (event.type === "session.idle" || event.type === "session.error") {
+          await handleSessionDone(event as EventPayload)
+        }
+
+        if (event.type === "permission.asked") {
+          await handlePermission(event as EventPayload)
+        }
+      } catch {
+        // Never crash OpenCode
+      }
+    },
   }
 }
 
-async function handlePermission(event: PermissionEvent): Promise<void> {
-  try {
-    if (event.session?.parentID) return;
-    await notify({
-      state: "question",
-      trigger: "permission",
-      tool: "opencode",
-      cwd: event.session?.cwd,
-    });
-  } catch {
-    // Never crash OpenCode
-  }
-}
+export default OpenCodeAgentNotify
 
-export default {
-  "session.idle": handleSessionDone,
-  "session.error": handleSessionDone,
-  "permission.updated": handlePermission,
-};
+export const plugin = OpenCodeAgentNotify

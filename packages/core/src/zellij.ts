@@ -55,24 +55,28 @@ export function markTabNotified(tabId: number, originalName: string): void {
 
   // Poller: check every second, restore name when tab becomes active (5-min timeout)
   const script = `
-    const { execSync } = require('child_process');
-    const MAX = 300;
-    let tries = 0;
-    function poll() {
-      if (++tries > MAX) return;
-      try {
-        const tabs = JSON.parse(execSync('zellij action list-tabs --json').toString());
-        const tab = tabs.find(t => t.tab_id === ${tabId});
-        if (tab && tab.active) {
-          execSync('zellij action rename-tab -t ${tabId} ' + JSON.stringify(${JSON.stringify(originalName)}));
-          return;
-        }
-      } catch {}
-      setTimeout(poll, 1000);
-    }
-    poll();
-  `
-  const child = spawn(process.execPath, ["-e", script], { detached: true, stdio: "ignore" })
+set -e
+MAX=300
+tries=0
+while [ "$tries" -lt "$MAX" ]; do
+  tries=$((tries + 1))
+  tabs="$(zellij action list-tabs --json 2>/dev/null || true)"
+  if [ -n "$tabs" ] && printf '%s' "$tabs" | jq -e --argjson tabId "$TAB_ID" '.[] | select(.tab_id == $tabId and .active == true)' >/dev/null 2>&1; then
+    zellij action rename-tab -t "$TAB_ID" "$ORIGINAL_NAME" >/dev/null 2>&1 || true
+    exit 0
+  fi
+  sleep 1
+done
+`
+  const child = spawn("sh", ["-c", script], {
+    detached: true,
+    stdio: "ignore",
+    env: {
+      ...process.env,
+      TAB_ID: String(tabId),
+      ORIGINAL_NAME: originalName,
+    },
+  })
   child.unref()
 }
 

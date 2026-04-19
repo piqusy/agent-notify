@@ -6,4 +6,6 @@ export default defineConfig({
   format:   ["esm"],
   dts:      true,
   clean:    true,
+  bundle:   true,
+  noExternal: ["@agent-notify/core"],
 })

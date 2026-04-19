@@ -21,6 +21,6 @@ describe("workspace versions", () => {
   it("keeps all package versions aligned", async () => {
     const versions = await Promise.all(packagePaths.map(readVersion))
     expect(new Set(versions).size).toBe(1)
-    expect(versions[0]).toBe("0.1.21")
+    expect(versions[0]).toBe("0.1.22")
   })
 })

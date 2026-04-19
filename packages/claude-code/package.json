@@ -1,6 +1,6 @@
 {
   "name": "@agent-notify/claude-code",
-  "version": "0.1.21",
+  "version": "0.1.23",
   "description": "Claude Code hooks for agent-notify",
   "private": true,
   "scripts": {},

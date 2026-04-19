@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { isZellijSession } from "../zellij.js"
+import * as childProcess from "node:child_process"
+import { isZellijSession, markTabNotified } from "../zellij.js"
 
 // We mock the module-level execAsync by mocking child_process.exec
 // and then reimporting. Since Bun's ESM mock requires a factory, we
@@ -104,5 +105,24 @@ describe("pane tab active detection logic", () => {
       { tab_id: 3, active: true },
     ])
     expect(await checkPaneTabActive(panes, tabs, "5")).toBe(false)
+  })
+})
+
+describe("markTabNotified", () => {
+  it("spawns shell poller with tab env", () => {
+    const execSyncSpy = vi.spyOn(childProcess, "execSync").mockReturnValue(Buffer.from("") as never)
+    const spawnSpy = vi.spyOn(childProcess, "spawn").mockReturnValue({ unref: vi.fn() } as never)
+
+    markTabNotified(12, "agent-notify")
+
+    expect(execSyncSpy).toHaveBeenCalled()
+    expect(spawnSpy).toHaveBeenCalled()
+    const [cmd, args, opts] = spawnSpy.mock.calls[0] as any
+    expect(cmd).toBe("sh")
+    expect(args).toEqual(["-c", expect.stringContaining("zellij action list-tabs --json")])
+    expect(opts.env.TAB_ID).toBe("12")
+    expect(opts.env.ORIGINAL_NAME).toBe("agent-notify")
+
+    vi.restoreAllMocks()
   })
 })

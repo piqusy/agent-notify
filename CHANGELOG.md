@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.23] — 2026-04-20
+
+### Fixed
+- OpenCode plugin now loads from `~/.config/opencode/plugins/` and badge clear poller uses runtime-agnostic shell process, so notification indicator clears after focus returns
+
 ## [0.1.22] — 2026-04-19
 
 ### Added

@@ -78,7 +78,7 @@ Hooks are configured in `~/.claude/settings.json`. After running `./install.sh` 
 
 ## OpenCode
 
-`install.sh` adds local plugin path to `~/.config/opencode/opencode.json` automatically and replaces old bare `opencode-agent-notify` entries. It listens to `session.idle` and `permission.updated` events.
+`install.sh` adds local plugin path to `~/.config/opencode/opencode.json` automatically and replaces old bare `opencode-agent-notify` entries. It listens to `session.idle`, `session.error`, and `permission.asked` events.
 
 ## Configuration
 
@@ -123,6 +123,16 @@ agent-notify doctor
 ```
 
 It checks config validity, backend detection, notification permissions, focus state, quiet hours, and sound files in one pass.
+
+## Local testing
+
+```sh
+bun install
+bun run build
+bun run test
+```
+
+For OpenCode specifically, rerun `./install.sh` after building so `~/.config/opencode/opencode.json` points at local plugin path, then start fresh OpenCode session and trigger `session.idle` or `permission.asked`.
 
 ### No notifications appear
 
