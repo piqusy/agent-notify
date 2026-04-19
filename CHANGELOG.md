@@ -1,9 +1,9 @@
 # Changelog
 
-## [0.1.18] — 2026-04-19
+## [0.1.20] — 2026-04-19
 
 ### Fixed
-- Add versioned Homebrew formula output so exact release installs can target `agent-notify@0.1.18`
+- Unify workspace package versions and release docs around `0.1.20`
 
 ## [0.1.19] — 2026-04-19
 
