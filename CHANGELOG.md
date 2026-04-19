@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.16] — 2026-04-19
+
+### Fixed
+- Fix Homebrew formula install paths for bundled binary and OpenCode plugin after release tarball packaging change
+
 ## [0.1.15] — 2026-04-19
 
 ### Fixed
