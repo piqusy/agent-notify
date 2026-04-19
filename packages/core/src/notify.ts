@@ -101,7 +101,7 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
   // 7. Zellij tab icon — mark the background tab so user sees it in the tab bar
   if (isZellijSession()) {
     const tabInfo = await getCurrentTabInfo()
-    if (tabInfo && !tabInfo.tabName.startsWith("● ")) {
+    if (tabInfo && !tabInfo.tabName.startsWith(" ●")) {
       markTabNotified(tabInfo.tabId, tabInfo.tabName)
     }
   }

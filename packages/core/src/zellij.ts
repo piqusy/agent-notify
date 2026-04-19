@@ -11,7 +11,7 @@ export function isZellijSession(): boolean {
   return process.env.ZELLIJ !== undefined
 }
 
-const TAB_NOTIFY_PREFIX = "● "
+const TAB_NOTIFY_PREFIX = " ●"
 
 /**
  * Returns the current pane's tab ID and name, or null if unavailable.
