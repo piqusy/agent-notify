@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.21] — 2026-04-19
+
+### Fixed
+- Add release-time changelog validation so future tags must carry a top release entry
+
 ## [0.1.20] — 2026-04-19
 
 ### Fixed
