@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.18] — 2026-04-19
+
+### Fixed
+- Add versioned Homebrew formula output so exact release installs can target `agent-notify@0.1.17`
+
 ## [0.1.17] — 2026-04-19
 
 ### Fixed
