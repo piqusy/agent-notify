@@ -99,18 +99,28 @@ jobs:
             Formula/agent-notify.rb
           cat Formula/agent-notify.rb
 
-      - name: Create versioned formula
+      - name: Compute versioned formula name
+        id: names
         env:
           VERSION: ${{ github.ref_name }}
         run: |
           VERSION_NO_V=${VERSION#v}
+          FORMULA_PATH="Formula/agent-notify@${VERSION_NO_V}.rb"
+          echo "version_no_v=${VERSION_NO_V}" >> "$GITHUB_OUTPUT"
+          echo "formula_path=${FORMULA_PATH}" >> "$GITHUB_OUTPUT"
+
+      - name: Create versioned formula
+        env:
+          FORMULA_PATH: ${{ steps.names.outputs.formula_path }}
+          VERSION_NO_V: ${{ steps.names.outputs.version_no_v }}
+        run: |
           VERSION_CLASS=AgentNotifyAT${VERSION_NO_V//./}
-          cp Formula/agent-notify.rb "Formula/agent-notify@${VERSION_NO_V}.rb"
+          cp Formula/agent-notify.rb "$FORMULA_PATH"
           sed -i \
             -e "s|class AgentNotify < Formula|class ${VERSION_CLASS} < Formula|" \
             -e "s|This formula is auto-updated by the release workflow\.|This formula is a versioned release formula.|" \
             -e "s|Do not manually edit the version, arm64_sha256, or x64_sha256 fields\.|Do not manually edit the version or SHA fields.|" \
-            "Formula/agent-notify@${VERSION_NO_V}.rb"
+            "$FORMULA_PATH"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -120,13 +130,18 @@ jobs:
             dist/agent-notify-darwin-x64.tar.gz
             dist/checksums.txt
             Formula/agent-notify.rb
-            Formula/agent-notify@${{ github.ref_name }}.rb
-            body: |
+            ${{ steps.names.outputs.formula_path }}
+          body: |
             ## Install via Homebrew
 
             ```sh
             brew tap piqusy/tap
             brew install agent-notify
+            ```
+
+            Exact version:
+            ```sh
+             brew install piqusy/tap/agent-notify@${{ steps.names.outputs.version_no_v }}
             ```
 
             Upgrade:
@@ -185,18 +200,28 @@ jobs:
             -e "s|HOMEBREW_X64_SHA_PLACEHOLDER|${X64_SHA}|g" \
             Formula/agent-notify.rb
 
-      - name: Create versioned tap formula
+      - name: Compute versioned formula name
+        id: names
         env:
           VERSION: ${{ github.ref_name }}
         run: |
           VERSION_NO_V=${VERSION#v}
+          FORMULA_PATH="Formula/agent-notify@${VERSION_NO_V}.rb"
+          echo "version_no_v=${VERSION_NO_V}" >> "$GITHUB_OUTPUT"
+          echo "formula_path=${FORMULA_PATH}" >> "$GITHUB_OUTPUT"
+
+      - name: Create versioned tap formula
+        env:
+          FORMULA_PATH: ${{ steps.names.outputs.formula_path }}
+          VERSION_NO_V: ${{ steps.names.outputs.version_no_v }}
+        run: |
           VERSION_CLASS=AgentNotifyAT${VERSION_NO_V//./}
-          cp Formula/agent-notify.rb "Formula/agent-notify@${VERSION_NO_V}.rb"
+          cp Formula/agent-notify.rb "$FORMULA_PATH"
           sed -i \
             -e "s|class AgentNotify < Formula|class ${VERSION_CLASS} < Formula|" \
             -e "s|This formula is auto-updated by the release workflow\.|This formula is a versioned release formula.|" \
             -e "s|Do not manually edit the version, arm64_sha256, or x64_sha256 fields\.|Do not manually edit the version or SHA fields.|" \
-            "Formula/agent-notify@${VERSION_NO_V}.rb"
+            "$FORMULA_PATH"
 
       - name: Configure SSH for tap repo
         run: |
@@ -217,13 +242,13 @@ jobs:
       - name: Copy patched formula into tap
         run: |
           cp Formula/agent-notify.rb tap/Formula/agent-notify.rb
-          cp "Formula/agent-notify@${{ github.ref_name }}.rb" "tap/Formula/agent-notify@${{ github.ref_name }}.rb"
+          cp "${{ steps.names.outputs.formula_path }}" "tap/${{ steps.names.outputs.formula_path }}"
 
       - name: Commit and push to tap
         run: |
           cd tap
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Formula/agent-notify.rb Formula/agent-notify@${{ github.ref_name }}.rb
+          git add Formula/agent-notify.rb "${{ steps.names.outputs.formula_path }}"
           git commit -m "update: agent-notify ${{ github.ref_name }}"
           git push

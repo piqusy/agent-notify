@@ -3,7 +3,12 @@
 ## [0.1.18] — 2026-04-19
 
 ### Fixed
-- Add versioned Homebrew formula output so exact release installs can target `agent-notify@0.1.17`
+- Add versioned Homebrew formula output so exact release installs can target `agent-notify@0.1.18`
+
+## [0.1.19] — 2026-04-19
+
+### Fixed
+- Make Homebrew exact-version docs generic and correct release workflow formula naming after `v0.1.18` tap update failure
 
 ## [0.1.17] — 2026-04-19
 

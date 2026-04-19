@@ -28,7 +28,7 @@ brew install agent-notify
 Exact release pinning:
 
 ```sh
-brew install piqusy/tap/agent-notify@0.1.17
+brew install piqusy/tap/agent-notify@<version>
 ```
 
 ### From source
