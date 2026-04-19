@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.22] — 2026-04-19
+
+### Added
+- Zellij tab notification indicator: adds `●` prefix to the tab name when a notification fires from a background pane; auto-removes when the user focuses that tab
+
 ## [0.1.21] — 2026-04-19
 
 ### Fixed

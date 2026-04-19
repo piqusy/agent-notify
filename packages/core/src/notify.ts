@@ -5,7 +5,7 @@ import type { NotifyInput } from "./types.js"
 import { loadConfig } from "./config.js"
 import { checkAndUpdateCooldown, cooldownFilePath } from "./cooldown.js"
 import { isTerminalFocused, resolveTerminalApp } from "./focus.js"
-import { isZellijSession, isPaneTabActive } from "./zellij.js"
+import { isZellijSession, isPaneTabActive, getCurrentTabInfo, markTabNotified } from "./zellij.js"
 import { resolveSound } from "./sounds.js"
 import { sendNotification } from "./platform/index.js"
 
@@ -97,5 +97,14 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
 
   // 6. Send
   await sendNotification(payload, config)
+
+  // 7. Zellij tab icon — mark the background tab so user sees it in the tab bar
+  if (isZellijSession()) {
+    const tabInfo = await getCurrentTabInfo()
+    if (tabInfo && !tabInfo.tabName.startsWith("● ")) {
+      markTabNotified(tabInfo.tabId, tabInfo.tabName)
+    }
+  }
+
   return { sent: true }
 }
