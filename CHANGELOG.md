@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.17] — 2026-04-19
+
+### Fixed
+- Homebrew formula now installs from unpacked tarball root, matching how brew extracts the release archive
+
 ## [0.1.16] — 2026-04-19
 
 ### Fixed
