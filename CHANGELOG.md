@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.28] — 2026-04-21
+
+### Added
+- CONTRIBUTING.md now documents local work and release procedure
+
 ## [0.1.27] — 2026-04-21
 
 ### Fixed
