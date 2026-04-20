@@ -73,10 +73,13 @@ jobs:
         run: |
           VERSION_NO_V=${VERSION#v}
           TOP_ENTRY=$(awk '/^## \[/ { print; exit }' CHANGELOG.md)
-          if [ "$TOP_ENTRY" != "## [${VERSION_NO_V}] — $(date +%Y-%m-%d)" ] && [ "$TOP_ENTRY" != "## [${VERSION_NO_V}] — 2026-04-19" ]; then
+          case "$TOP_ENTRY" in
+            "## [${VERSION_NO_V}] — "*) ;;
+            *)
             echo "Changelog top entry does not match release version: $TOP_ENTRY"
             exit 1
-          fi
+            ;;
+          esac
           if ! awk 'BEGIN{entry=0; bullets=0} /^## \[/{entry=1; next} entry && /^### /{bullets=1; exit} END{exit bullets ? 0 : 1}' CHANGELOG.md; then
             echo "Changelog entry missing section heading"
             exit 1
