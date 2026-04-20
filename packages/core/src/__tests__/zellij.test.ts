@@ -1,4 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+vi.mock("node:child_process", () => ({
+  exec: vi.fn(),
+  execSync: vi.fn(),
+  spawn: vi.fn(() => ({ unref: vi.fn() })),
+}))
+
 import * as childProcess from "node:child_process"
 import { isZellijSession, markTabNotified } from "../zellij.js"
 
@@ -110,19 +116,17 @@ describe("pane tab active detection logic", () => {
 
 describe("markTabNotified", () => {
   it("spawns shell poller with tab env", () => {
-    const execSyncSpy = vi.spyOn(childProcess, "execSync").mockReturnValue(Buffer.from("") as never)
-    const spawnSpy = vi.spyOn(childProcess, "spawn").mockReturnValue({ unref: vi.fn() } as never)
+    const execSyncMock = childProcess.execSync as unknown as { mock: { calls: unknown[][] } }
+    const spawnMock = childProcess.spawn as unknown as { mock: { calls: unknown[][] } }
 
     markTabNotified(12, "agent-notify")
 
-    expect(execSyncSpy).toHaveBeenCalled()
-    expect(spawnSpy).toHaveBeenCalled()
-    const [cmd, args, opts] = spawnSpy.mock.calls[0] as any
+    expect(execSyncMock).toHaveBeenCalled()
+    expect(spawnMock).toHaveBeenCalled()
+    const [cmd, args, opts] = spawnMock.mock.calls[0] as any
     expect(cmd).toBe("sh")
     expect(args).toEqual(["-c", expect.stringContaining("zellij action list-tabs --json")])
     expect(opts.env.TAB_ID).toBe("12")
     expect(opts.env.ORIGINAL_NAME).toBe("agent-notify")
-
-    vi.restoreAllMocks()
   })
 })
