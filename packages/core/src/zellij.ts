@@ -43,7 +43,7 @@ export async function getCurrentTabInfo(): Promise<{ tabId: number; tabName: str
 
 /**
  * Adds a ● prefix to the given tab's name and spawns a background poller
- * that removes it once the tab becomes active (user focuses it).
+ * that removes only that prefix once the tab becomes active.
  * No-ops if the tab name already has the prefix.
  */
 export function markTabNotified(tabId: number, originalName: string): void {
@@ -62,7 +62,11 @@ while [ "$tries" -lt "$MAX" ]; do
   tries=$((tries + 1))
   tabs="$(zellij action list-tabs --json 2>/dev/null || true)"
   if [ -n "$tabs" ] && printf '%s' "$tabs" | jq -e --argjson tabId "$TAB_ID" '.[] | select(.tab_id == $tabId and .active == true)' >/dev/null 2>&1; then
-    zellij action rename-tab -t "$TAB_ID" "$ORIGINAL_NAME" >/dev/null 2>&1 || true
+    current_name="$(printf '%s' "$tabs" | jq -r --argjson tabId "$TAB_ID" '.[] | select(.tab_id == $tabId) | .name' 2>/dev/null || true)"
+    restored_name="$(printf '%s' "$current_name" | sed 's/^ ●//')"
+    if [ "$restored_name" != "$current_name" ]; then
+      zellij action rename-tab -t "$TAB_ID" "$restored_name" >/dev/null 2>&1 || true
+    fi
     exit 0
   fi
   sleep 1
@@ -74,7 +78,6 @@ done
     env: {
       ...process.env,
       TAB_ID: String(tabId),
-      ORIGINAL_NAME: originalName,
     },
   })
   child.unref()

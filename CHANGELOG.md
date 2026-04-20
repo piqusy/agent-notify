@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.25] — 2026-04-20
+
+### Fixed
+- Zellij tab marker cleanup now strips marker from current tab name instead of restoring a stale snapshot, so user renames survive
+
 ## [0.1.24] — 2026-04-20
 
 ### Fixed
