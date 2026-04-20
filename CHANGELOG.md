@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.27] — 2026-04-21
+
+### Fixed
+- Zellij tab notification symbol now keeps a space before tab title
+
 ## [0.1.26] — 2026-04-20
 
 ### Fixed

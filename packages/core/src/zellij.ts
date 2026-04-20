@@ -11,7 +11,7 @@ export function isZellijSession(): boolean {
   return process.env.ZELLIJ !== undefined
 }
 
-const TAB_NOTIFY_PREFIX = " ●"
+const TAB_NOTIFY_PREFIX = " ● "
 
 /**
  * Returns the current pane's tab ID and name, or null if unavailable.
@@ -63,7 +63,7 @@ while [ "$tries" -lt "$MAX" ]; do
   tabs="$(zellij action list-tabs --json 2>/dev/null || true)"
   if [ -n "$tabs" ] && printf '%s' "$tabs" | jq -e --argjson tabId "$TAB_ID" '.[] | select(.tab_id == $tabId and .active == true)' >/dev/null 2>&1; then
     current_name="$(printf '%s' "$tabs" | jq -r --argjson tabId "$TAB_ID" '.[] | select(.tab_id == $tabId) | .name' 2>/dev/null || true)"
-    restored_name="$(printf '%s' "$current_name" | sed 's/^ ●//')"
+     restored_name="$(printf '%s' "$current_name" | sed 's/^ ● //')"
     if [ "$restored_name" != "$current_name" ]; then
       zellij action rename-tab -t "$TAB_ID" "$restored_name" >/dev/null 2>&1 || true
     fi

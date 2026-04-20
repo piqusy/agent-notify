@@ -129,6 +129,6 @@ describe("markTabNotified", () => {
     expect(opts.env.TAB_ID).toBe("12")
     expect(args[1]).toContain("current_name")
     expect(args[1]).toContain("restored_name")
-    expect(args[1]).toContain("sed 's/^ ●//'")
+    expect(args[1]).toContain("sed 's/^ ● //'")
   })
 })
