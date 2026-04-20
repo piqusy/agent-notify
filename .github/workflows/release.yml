@@ -85,6 +85,24 @@ jobs:
             exit 1
           fi
 
+      - name: Validate source versions
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          VERSION_NO_V=${VERSION#v}
+          CLI_VERSION=$(node -e 'const fs=require("fs"); const s=fs.readFileSync("cli/src/version.ts","utf8"); const m=s.match(/CLI_VERSION\s*=\s*"([^"]+)"/); if (!m) process.exit(1); process.stdout.write(m[1]);')
+          for FILE in cli/package.json packages/core/package.json packages/opencode/package.json packages/claude-code/package.json; do
+            PKG_VERSION=$(node -e 'const fs=require("fs"); const file=process.argv[1]; const pkg=JSON.parse(fs.readFileSync(file,"utf8")); process.stdout.write(pkg.version);' "$FILE")
+            if [ "$PKG_VERSION" != "$VERSION_NO_V" ]; then
+              echo "$FILE version $PKG_VERSION does not match release version $VERSION_NO_V"
+              exit 1
+            fi
+          done
+          if [ "$CLI_VERSION" != "$VERSION_NO_V" ]; then
+            echo "cli/src/version.ts version $CLI_VERSION does not match release version $VERSION_NO_V"
+            exit 1
+          fi
+
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:

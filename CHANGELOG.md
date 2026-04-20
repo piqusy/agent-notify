@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.29] — 2026-04-21
+
+### Fixed
+- Version sources now stay aligned across CLI, workspace packages, tests, and release validation
+
 ## [0.1.28] — 2026-04-21
 
 ### Added

@@ -17,10 +17,23 @@ async function readVersion(parts: string[]): Promise<string> {
   return data.version
 }
 
+async function readCliVersion(): Promise<string> {
+  const file = join(root, "cli", "src", "version.ts")
+  const source = await readFile(file, "utf8")
+  const match = source.match(/CLI_VERSION\s*=\s*"([^"]+)"/)
+  if (!match) throw new Error(`Missing CLI_VERSION in ${file}`)
+  return match[1]
+}
+
 describe("workspace versions", () => {
   it("keeps all package versions aligned", async () => {
     const versions = await Promise.all(packagePaths.map(readVersion))
     expect(new Set(versions).size).toBe(1)
-    expect(versions[0]).toBe("0.1.26")
+  })
+
+  it("keeps cli version aligned with packages", async () => {
+    const versions = await Promise.all(packagePaths.map(readVersion))
+    const cliVersion = await readCliVersion()
+    expect(cliVersion).toBe(versions[0])
   })
 })
