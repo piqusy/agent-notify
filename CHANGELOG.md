@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.26] — 2026-04-20
+
+### Fixed
+- Zellij tab marker now appears before macOS notification send, so tab state updates sooner
+
 ## [0.1.25] — 2026-04-20
 
 ### Fixed

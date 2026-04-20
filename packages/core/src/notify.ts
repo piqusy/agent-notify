@@ -95,16 +95,16 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
 
   const payload: NotifyPayload = { title, body, ...(sound ? { sound } : {}) }
 
-  // 6. Send
-  await sendNotification(payload, config)
-
-  // 7. Zellij tab icon — mark the background tab so user sees it in the tab bar
+  // 6. Zellij tab icon — mark the background tab before macOS notification shows
   if (isZellijSession()) {
     const tabInfo = await getCurrentTabInfo()
     if (tabInfo && !tabInfo.tabName.startsWith(" ●")) {
       markTabNotified(tabInfo.tabId, tabInfo.tabName)
     }
   }
+
+  // 7. Send
+  await sendNotification(payload, config)
 
   return { sent: true }
 }
