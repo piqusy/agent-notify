@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.24] — 2026-04-20
+
+### Fixed
+- CLI version output now matches current release after stale baked-in `0.1.14` value in built binary
+
 ## [0.1.23] — 2026-04-20
 
 ### Fixed
