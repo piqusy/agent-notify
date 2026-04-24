@@ -3,6 +3,7 @@ import { notify, BUILTIN_SOUNDS } from "@agent-notify/core";
 import { ExitPromptError } from "@inquirer/core";
 import { cmdInit } from "./commands/init.js";
 import { cmdDoctor } from "./commands/doctor.js";
+import { cmdInstall, cmdUninstall } from "./commands/install.js";
 import { playSoundSync } from "./sounds/play.js";
 import { CLI_VERSION } from "./version.js";
 
@@ -70,12 +71,16 @@ Usage:
   agent-notify done [dir] [--tool <name>]           Send a "done" notification
   agent-notify question [dir] [--tool <name>]       Send a "question/waiting" notification
   agent-notify test [done|question] [--force|-f]    Send a test notification (--force bypasses focus/cooldown)
-  agent-notify sounds                List available notification sounds
-  agent-notify sounds --play <name>  Play a sound by name
-  agent-notify init                  Interactive setup wizard
-  agent-notify doctor                Run diagnostics
-  agent-notify --help                Show this help
-  agent-notify --version             Show version
+  agent-notify sounds                      List available notification sounds
+  agent-notify sounds --play <name>        Play a sound by name
+  agent-notify init                        Interactive setup wizard
+  agent-notify doctor                      Run diagnostics
+  agent-notify install [all|pi|opencode|claude-code]
+                                          Install integration(s)
+  agent-notify uninstall [all|pi|opencode|claude-code]
+                                          Remove integration(s)
+  agent-notify --help                      Show this help
+  agent-notify --version                   Show version
 `);
 }
 
@@ -98,6 +103,12 @@ async function main(): Promise<void> {
       break;
     case "doctor":
       await cmdDoctor();
+      break;
+    case "install":
+      await cmdInstall(args);
+      break;
+    case "uninstall":
+      await cmdUninstall(args);
       break;
     case "--help":
     case "-h":

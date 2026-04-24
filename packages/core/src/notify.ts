@@ -74,6 +74,7 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
     cli: "CLI",
     opencode: "OpenCode",
     "claude-code": "Claude Code",
+    "pi-coding-agent": "Pi",
     test: "Test",
   }
   const displayName = TOOL_DISPLAY_NAMES[input.tool]

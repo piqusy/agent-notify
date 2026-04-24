@@ -52,6 +52,18 @@ jobs:
           cp packages/opencode/package.json dist/${{ matrix.outfile }}/opencode-agent-notify/
           cp -R packages/opencode/dist dist/${{ matrix.outfile }}/opencode-agent-notify/
 
+      - name: Stage Claude Code hook bundle (${{ matrix.arch }})
+        run: |
+          mkdir -p dist/${{ matrix.outfile }}/claude-code/hooks
+          cp packages/claude-code/README.md dist/${{ matrix.outfile }}/claude-code/
+          cp -R packages/claude-code/hooks/. dist/${{ matrix.outfile }}/claude-code/hooks/
+
+      - name: Stage Pi extension bundle (${{ matrix.arch }})
+        run: |
+          mkdir -p dist/${{ matrix.outfile }}/pi-coding-agent
+          cp packages/pi-coding-agent/README.md dist/${{ matrix.outfile }}/pi-coding-agent/
+          cp packages/pi-coding-agent/src/agent-notify.ts dist/${{ matrix.outfile }}/pi-coding-agent/
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

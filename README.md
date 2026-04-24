@@ -1,6 +1,6 @@
 # agent-notify
 
-Desktop notifications for AI coding agents — get notified when [Claude Code](https://claude.ai/code) or [OpenCode](https://opencode.ai) finishes a task, asks a question, or needs your permission.
+Desktop notifications for AI coding agents — get notified when [Claude Code](https://claude.ai/code), [OpenCode](https://opencode.ai), or [Pi](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) finishes a task or needs your attention.
 
 ## Why
 
@@ -15,6 +15,7 @@ AI agents can take minutes on complex tasks. Instead of watching the terminal, y
 - Cooldown to avoid notification spam
 - Focus detection — skips notification if your terminal is already in focus
 - Works with Claude Code and OpenCode out of the box
+- Supports Pi via a tiny auto-discovered extension
 
 ## Install
 
@@ -41,7 +42,16 @@ cd agent-notify
 ./install.sh
 ```
 
-`install.sh` builds the project, links the CLI, runs the setup wizard, and wires Claude Code hooks and the OpenCode plugin automatically — with graceful fallbacks if either tool isn't installed.
+`install.sh` builds the project, links the CLI, runs the setup wizard, and installs integrations for detected tools.
+
+Manual integration wiring is also available:
+
+```sh
+agent-notify install all
+agent-notify install claude-code
+agent-notify install opencode
+agent-notify install pi
+```
 
 ## Setup
 
@@ -64,11 +74,19 @@ agent-notify test done         # send a test notification
 agent-notify sounds            # list available sounds
 agent-notify sounds --play Morse
 agent-notify init              # re-run setup wizard
+agent-notify install all       # install all supported integrations
+agent-notify uninstall pi      # remove one integration
 ```
 
 ## Claude Code
 
-Hooks are configured in `~/.claude/settings.json`. After running `./install.sh` or wiring manually:
+Install with:
+
+```sh
+agent-notify install claude-code
+```
+
+Hooks are configured in `~/.claude/settings.json`:
 
 | Hook | Event |
 |------|-------|
@@ -78,7 +96,36 @@ Hooks are configured in `~/.claude/settings.json`. After running `./install.sh` 
 
 ## OpenCode
 
-`install.sh` adds local plugin path to `~/.config/opencode/opencode.json` automatically and replaces old bare `opencode-agent-notify` entries. It listens to `session.idle`, `session.error`, and `permission.asked` events.
+Install with:
+
+```sh
+agent-notify install opencode
+```
+
+This copies the plugin into `~/.config/opencode/plugins/opencode-agent-notify/` and updates `~/.config/opencode/opencode.json`. It listens to `session.idle`, `session.error`, and `permission.asked` events.
+
+## Pi
+
+Install with:
+
+```sh
+agent-notify install pi
+```
+
+This copies `agent-notify.ts` into `~/.pi/agent/extensions/`, which Pi auto-discovers on startup.
+
+It emits:
+
+- **done** when Pi finishes a turn
+- **question** when the last assistant line ends with `?`
+
+Pi does not have a built-in permission-request event, so there is no Pi `permission` notification.
+
+Remove it later with:
+
+```sh
+agent-notify uninstall pi
+```
 
 ## Configuration
 
@@ -133,6 +180,8 @@ bun run test
 ```
 
 For OpenCode specifically, rerun `./install.sh` after building so `~/.config/opencode/opencode.json` points at local plugin path, then start fresh OpenCode session and trigger `session.idle` or `permission.asked`.
+
+For Pi specifically, rerun `./install.sh` after editing `packages/pi-coding-agent/src/agent-notify.ts` so the latest extension is copied into `~/.pi/agent/extensions/agent-notify.ts`.
 
 ### No notifications appear
 

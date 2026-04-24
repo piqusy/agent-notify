@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.30] — 2026-04-24
+
+### Added
+- `agent-notify install|uninstall [all|claude-code|opencode|pi]` for one-command integration management from the CLI
+- Claude Code hooks are now bundled in release artifacts and Homebrew installs, matching OpenCode and Pi integration assets
+
+### Fixed
+- `install.sh` now delegates to the CLI installer and only wires tools detected on the current machine
+
 ## [0.1.29] — 2026-04-21
 
 ### Fixed

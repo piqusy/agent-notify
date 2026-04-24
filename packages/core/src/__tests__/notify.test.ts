@@ -84,4 +84,15 @@ describe("notify integration (skip in CI — uses real config/fs)", () => {
     expect((zellij.markTabNotified as unknown as { mock: { invocationCallOrder: number[] } }).mock.invocationCallOrder[0])
       .toBeLessThan((platform.sendNotification as unknown as { mock: { invocationCallOrder: number[] } }).mock.invocationCallOrder[0])
   })
+
+  it("uses friendly display names for supported tools", async () => {
+    const sendNotification = vi.spyOn(platform, "sendNotification").mockResolvedValue(undefined)
+
+    await notify({ state: "done", tool: "pi-coding-agent", cwd: process.cwd() })
+
+    expect(sendNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Pi — Done" }),
+      expect.anything(),
+    )
+  })
 })

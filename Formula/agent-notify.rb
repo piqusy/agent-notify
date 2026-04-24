@@ -3,7 +3,7 @@
 # This formula is auto-updated by the release workflow.
 # Do not manually edit the version, arm64_sha256, or x64_sha256 fields.
 class AgentNotify < Formula
-  desc "Desktop notifications for AI agents (Claude Code, OpenCode)"
+  desc "Desktop notifications for AI agents (Claude Code, OpenCode, Pi)"
   homepage "https://github.com/piqusy/agent-notify"
   version "HOMEBREW_VERSION_PLACEHOLDER"
   license "MIT"
@@ -20,7 +20,7 @@ class AgentNotify < Formula
 
   def install
     bin.install "bin/agent-notify"
-    libexec.install "opencode-agent-notify"
+    libexec.install "opencode-agent-notify", "claude-code", "pi-coding-agent"
   end
 
   test do

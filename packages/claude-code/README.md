@@ -4,7 +4,13 @@ This directory contains shell hooks for Claude Code integration.
 
 ## Installation
 
-Add these hooks to your Claude Code settings (`.claude/settings.json`):
+Recommended:
+
+```sh
+agent-notify install claude-code
+```
+
+Manual wiring is also possible. Add these hooks to your Claude Code settings (`.claude/settings.json`):
 
 ```json
 {
