@@ -8,7 +8,7 @@ AI agents can take minutes on complex tasks. Instead of watching the terminal, y
 
 ## Features
 
-- Native macOS notifications via a bundled helper app (with legacy fallbacks)
+- Native macOS notifications via a bundled helper app
 - Three event types: **done**, **question**, **permission request**
 - Configurable sound per event (with live preview in the setup wizard)
 - Bundled Agent Notify app icon on macOS
@@ -152,7 +152,7 @@ agent-notify uninstall pi
 ```
 
 `terminalApp: null` — auto-detected via `$TERM_PROGRAM`. Set to e.g. `"iTerm2"` to override.  
-`backend: null` — auto-detected. On modern macOS this prefers the bundled native helper app, then falls back to `terminal-notifier`, then `osascript`.  
+`backend: null` — auto-detected. On modern macOS this prefers the bundled native helper app, then falls back to `osascript` only if the helper is unavailable.  
 `sounds.permission: null` — falls back to the question sound.  
 `quietHours: null` — disables quiet hours entirely (sounds play at all times).
 
@@ -161,7 +161,6 @@ agent-notify uninstall pi
 - macOS
 - [bun](https://bun.sh) (for source install only — Homebrew install is standalone)
 - Xcode Command Line Tools / Swift (for source install on macOS so the helper app can be built)
-- [terminal-notifier](https://github.com/julienXX/terminal-notifier) (optional legacy fallback only — `brew install terminal-notifier`)
 
 ## Troubleshooting
 
@@ -189,7 +188,7 @@ For Pi specifically, rerun `./install.sh` after editing `packages/pi-coding-agen
 
 - **macOS notification permissions** — the most common issue. Open **System Settings → Notifications → Agent Notify** and enable **Allow Notifications**. Set the alert style to **Banners** or **Alerts**.
 - **Native helper missing** — if you installed from source on macOS, rerun `bun run build` and make sure the helper app was built successfully.
-- **Legacy backend fallback** — if you explicitly use `terminal-notifier`, install it with: `brew install terminal-notifier`.
+- **Fallback backend** — if the helper app is unavailable, agent-notify can fall back to `osascript`, but the bundled helper is the supported macOS path.
 - **Focus detection** — if your terminal is the frontmost app, notifications are suppressed by design. Switch to another app or set `"terminalApp": null` in config to disable focus detection entirely.
 
 ### No sound
@@ -201,7 +200,7 @@ For Pi specifically, rerun `./install.sh` after editing `packages/pi-coding-agen
 
 ### macOS Sequoia / Tahoe
 
-On modern macOS, agent-notify uses its bundled native helper app by default. This is the recommended path for reliable notifications and the branded Agent Notify app icon. `terminal-notifier` remains available only as a legacy fallback.
+On modern macOS, agent-notify uses its bundled native helper app by default. This is the supported path for reliable notifications and the branded Agent Notify app icon.
 
 ### "Sent test notification" but nothing appeared
 

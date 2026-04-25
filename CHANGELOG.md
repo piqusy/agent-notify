@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.33] — 2026-04-25
+
+### Changed
+- Removed `terminal-notifier` as a macOS backend; the bundled native helper app is now the supported macOS path, with `osascript` kept only as a minimal fallback when the helper is unavailable
+
 ## [0.1.32] — 2026-04-25
 
 ### Fixed

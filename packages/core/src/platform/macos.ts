@@ -29,12 +29,6 @@ export function sendMacOS(
     if (backend === "macos-helper") {
       if (!options.helperAppPath) return;
       spawnSync("open", ["-n", options.helperAppPath, "--args", ...helperArgs(payload)], { stdio: "ignore" });
-    } else if (backend === "terminal-notifier") {
-      const args = ["-title", payload.title, "-message", payload.body];
-      if (payload.sound) {
-        args.push("-sound", payload.sound);
-      }
-      spawnSync("terminal-notifier", args, { stdio: "ignore" });
     } else {
       const sound = payload.sound ? ` sound name "${escapeDouble(payload.sound)}"` : "";
       const script = `display notification "${escapeDouble(payload.body)}" with title "${escapeDouble(payload.title)}"${sound}`;

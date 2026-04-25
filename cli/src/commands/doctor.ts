@@ -30,59 +30,6 @@ function getMacOSVersion(): string | null {
   }
 }
 
-function checkTerminalNotifierInstalled(): string | null {
-  const paths = [
-    "/opt/homebrew/bin/terminal-notifier",
-    "/usr/local/bin/terminal-notifier",
-  ]
-  for (const p of paths) {
-    if (existsSync(p)) return p
-  }
-  return null
-}
-
-function checkTerminalNotifierPermission(): { enabled: boolean | null; detail: string } {
-  if (process.platform !== "darwin") {
-    return { enabled: null, detail: "Not macOS — skipped" }
-  }
-
-  try {
-    const raw = execSync("defaults read com.apple.ncprefs apps", {
-      encoding: "utf8",
-      timeout: 5000,
-    })
-
-    const bundleIds = [
-      "fr.julienxx.oss.terminal-notifier",
-      "nl.superalloy.oss.terminal-notifier",
-    ]
-
-    for (const bundleId of bundleIds) {
-      const idx = raw.indexOf(bundleId)
-      if (idx === -1) continue
-
-      const chunk = raw.slice(idx, idx + 800)
-      const srcBlockMatch = chunk.match(/\bsrc\s*=\s*\([\s\S]*?flags\s*=\s*(\d+)/)
-      if (!srcBlockMatch) {
-        return { enabled: null, detail: `terminal-notifier found but permission state unclear (bundle: ${bundleId})` }
-      }
-
-      const flags = parseInt(srcBlockMatch[1], 10)
-      const enabled = (flags & 1) === 1
-      return {
-        enabled,
-        detail: enabled
-          ? `Notifications allowed (bundle: ${bundleId})`
-          : `Notifications DISABLED (bundle: ${bundleId})`,
-      }
-    }
-
-    return { enabled: null, detail: "terminal-notifier not found in Notification Center prefs" }
-  } catch {
-    return { enabled: null, detail: "Could not read notification preferences" }
-  }
-}
-
 function checkMacOSHelperPermission(): { enabled: boolean | null; detail: string } {
   const helperBinary = findMacOSHelperBinary()
   if (!helperBinary) {
@@ -125,7 +72,7 @@ function describeIconBehavior(backend: NotifyBackend | null): { level: "ok" | "w
     if (backend === "macos-helper") {
       return { level: "ok", detail: "Bundled Agent Notify app icon will be used" }
     }
-    return { level: "warn", detail: "Legacy macOS backends use their sender/default icon" }
+    return { level: "warn", detail: "Fallback backend uses the default macOS notification icon" }
   }
 
   return { level: "ok", detail: "Platform default icon will be used" }
@@ -171,18 +118,11 @@ export async function cmdDoctor(): Promise<void> {
     process.stderr.write = origStderrWrite
 
     const helperApp = findMacOSHelperApp()
-    const tnPath = checkTerminalNotifierInstalled()
     if (resolvedBackend === "macos-helper") {
       if (helperApp) {
         line(OK, "Backend", `${resolvedBackend}${config.backend ? " (explicit override)" : " (auto-detected)"} — ${helperApp}`)
       } else {
         line(FAIL, "Backend", "macos-helper selected but bundled helper app was not found")
-      }
-    } else if (resolvedBackend === "terminal-notifier") {
-      if (tnPath) {
-        line(OK, "Backend", `${resolvedBackend}${config.backend ? " (explicit override)" : " (auto-detected)"} — ${tnPath}`)
-      } else {
-        line(WARN, "Backend", `${resolvedBackend} selected but terminal-notifier is not installed`) 
       }
     } else {
       line(WARN, "Backend", `${resolvedBackend}${config.backend ? " (explicit override)" : " (auto-detected fallback)"}`)
@@ -190,9 +130,7 @@ export async function cmdDoctor(): Promise<void> {
 
     const perms = resolvedBackend === "macos-helper"
       ? checkMacOSHelperPermission()
-      : resolvedBackend === "terminal-notifier"
-        ? checkTerminalNotifierPermission()
-        : { enabled: null, detail: "Backend does not expose permission status" }
+      : { enabled: null, detail: "Backend does not expose permission status" }
 
     if (perms.enabled === true) {
       line(OK, "Permissions", perms.detail)
@@ -200,8 +138,6 @@ export async function cmdDoctor(): Promise<void> {
       line(FAIL, "Permissions", perms.detail)
       if (resolvedBackend === "macos-helper") {
         console.log("                    → Open System Settings > Notifications > Agent Notify > Allow Notifications")
-      } else if (resolvedBackend === "terminal-notifier") {
-        console.log("                    → Open System Settings > Notifications > terminal-notifier > Allow Notifications")
       }
     } else {
       line(WARN, "Permissions", perms.detail)

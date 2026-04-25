@@ -14,7 +14,6 @@ describe("detectMacOSBackend", () => {
 
   it("returns override if provided", async () => {
     expect(await detectMacOSBackend("osascript")).toBe("osascript");
-    expect(await detectMacOSBackend("terminal-notifier")).toBe("terminal-notifier");
     expect(await detectMacOSBackend("macos-helper")).toBe("macos-helper");
   });
 
@@ -23,13 +22,7 @@ describe("detectMacOSBackend", () => {
     expect(await detectMacOSBackend(null)).toBe("macos-helper");
   });
 
-  it("returns terminal-notifier if helper is missing but terminal-notifier exists", async () => {
-    vi.mocked(cp.execSync).mockReturnValue("14.5\n" as any);
-    vi.mocked(fs.existsSync).mockImplementation((path) => String(path) === "/opt/homebrew/bin/terminal-notifier");
-    expect(await detectMacOSBackend(null)).toBe("terminal-notifier");
-  });
-
-  it("returns osascript if neither helper nor terminal-notifier is found", async () => {
+  it("returns osascript if helper is not found", async () => {
     vi.mocked(cp.execSync).mockReturnValue("14.5\n" as any);
     vi.mocked(fs.existsSync).mockReturnValue(false);
     expect(await detectMacOSBackend(null)).toBe("osascript");
@@ -40,7 +33,7 @@ describe("detectMacOSBackend", () => {
     vi.mocked(fs.existsSync).mockReturnValue(false);
     const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     await detectMacOSBackend(null);
-    expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining("Native helper missing"));
+    expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining("falling back to osascript"));
     stderrSpy.mockRestore();
   });
 });

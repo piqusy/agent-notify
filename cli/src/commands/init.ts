@@ -31,19 +31,10 @@ const TERMINAL_CHOICES: Array<{ name: string; value: string | null }> = [
 const BACKEND_CHOICES: Array<{ name: string; value: NotifyBackend | null }> = [
   { name: "Auto-detect (recommended)", value: null },
   { name: "macos-helper (native app, recommended on modern macOS)", value: "macos-helper" },
-  { name: "terminal-notifier", value: "terminal-notifier" },
-  { name: "osascript (macOS built-in)", value: "osascript" },
+  { name: "osascript (macOS built-in fallback)", value: "osascript" },
   { name: "notify-send (Linux)", value: "notify-send" },
   { name: "PowerShell / BurntToast (Windows)", value: "powershell" },
 ]
-
-function checkTerminalNotifier(): boolean {
-  const paths = [
-    "/opt/homebrew/bin/terminal-notifier",
-    "/usr/local/bin/terminal-notifier",
-  ]
-  return paths.some((p) => fs.existsSync(p))
-}
 
 function detectMacOSVersion(): string | null {
   try {
@@ -61,7 +52,7 @@ export async function cmdInit(): Promise<void> {
   const macVersion = detectMacOSVersion()
   if (macVersion) {
     console.log(`macOS ${macVersion} detected.`)
-    console.log("  Native helper backend is recommended on modern macOS.\n")
+    console.log("  Native helper backend is the supported macOS path. osascript is kept only as a fallback.\n")
   }
 
   // --- Backend ---

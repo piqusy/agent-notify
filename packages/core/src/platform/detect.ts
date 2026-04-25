@@ -5,11 +5,6 @@ import { fileURLToPath } from "url";
 import type { NotifyBackend } from "../types.js";
 
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
-const TERMINAL_NOTIFIER_PATHS = [
-  "/opt/homebrew/bin/terminal-notifier",
-  "/usr/local/bin/terminal-notifier",
-];
-
 export const MACOS_HELPER_BUNDLE_ID = "io.github.piqusy.agentnotify";
 
 function unique<T>(items: T[]): T[] {
@@ -84,14 +79,8 @@ export function detectMacOSBackend(override: NotifyBackend | null): Promise<Noti
     const major = Number.parseInt(version.split(".")[0] ?? "0", 10);
     if (major >= 15) {
       process.stderr.write(
-        "[agent-notify] Modern macOS detected. Native helper missing; falling back to legacy notification backends.\n"
+        "[agent-notify] Modern macOS detected. Native helper missing; falling back to osascript.\n"
       );
-    }
-  }
-
-  for (const p of TERMINAL_NOTIFIER_PATHS) {
-    if (existsSync(p)) {
-      return Promise.resolve("terminal-notifier");
     }
   }
 
