@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.32] — 2026-04-25
+
+### Fixed
+- macOS helper app release artifacts are now built as universal binaries (`arm64` + `x86_64`), fixing Intel Sequoia installs where the bundled helper app could not launch or register as a notification sender
+
 ## [0.1.31] — 2026-04-25
 
 ### Added
