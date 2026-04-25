@@ -5,16 +5,37 @@ function escapeDouble(s: string): string {
   return s.replace(/"/g, '\\"');
 }
 
-export function sendMacOS(payload: NotifyPayload, backend: NotifyBackend): void {
+function helperArgs(payload: NotifyPayload): string[] {
+  const args = ["--title", payload.title, "--body", payload.body];
+
+  if (payload.sound) {
+    args.push("--sound", payload.sound);
+  }
+
+  const debugLog = process.env.AGENT_NOTIFY_MACOS_HELPER_LOG;
+  if (debugLog) {
+    args.push("--log-file", debugLog);
+  }
+
+  return args;
+}
+
+export function sendMacOS(
+  payload: NotifyPayload,
+  backend: NotifyBackend,
+  options: { helperAppPath?: string } = {},
+): void {
   try {
-    if (backend === "terminal-notifier") {
+    if (backend === "macos-helper") {
+      if (!options.helperAppPath) return;
+      spawnSync("open", ["-n", options.helperAppPath, "--args", ...helperArgs(payload)], { stdio: "ignore" });
+    } else if (backend === "terminal-notifier") {
       const args = ["-title", payload.title, "-message", payload.body];
       if (payload.sound) {
         args.push("-sound", payload.sound);
       }
       spawnSync("terminal-notifier", args, { stdio: "ignore" });
     } else {
-      // osascript — use spawnSync with arg array to avoid any shell injection
       const sound = payload.sound ? ` sound name "${escapeDouble(payload.sound)}"` : "";
       const script = `display notification "${escapeDouble(payload.body)}" with title "${escapeDouble(payload.title)}"${sound}`;
       spawnSync("osascript", ["-e", script], { stdio: "ignore" });

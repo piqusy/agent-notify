@@ -5,7 +5,7 @@ import { defaultConfigPath } from "@agent-notify/core"
 
 export type InstallTarget = "all" | "pi" | "opencode" | "claude-code"
 
-type ClaudeAssets = {
+type ClaudeCodeAssets = {
   stop: string
   notification: string
   permissionRequest: string
@@ -22,7 +22,7 @@ type PiAssets = {
 }
 
 type ResolvedAssets = {
-  claude: ClaudeAssets
+  claudeCode: ClaudeCodeAssets
   opencode: OpenCodeAssets
   pi: PiAssets
 }
@@ -35,15 +35,15 @@ type InstallEnvironment = {
   configPath?: string
 }
 
-type ClaudeHookCommand = {
+type ClaudeCodeHookCommand = {
   type?: string
   command?: string
   [key: string]: unknown
 }
 
-type ClaudeHookMatcher = {
+type ClaudeCodeHookMatcher = {
   matcher?: string
-  hooks?: ClaudeHookCommand[]
+  hooks?: ClaudeCodeHookCommand[]
   [key: string]: unknown
 }
 
@@ -91,7 +91,7 @@ function resolveAsset(relativePaths: string[]): string {
 
 export function resolveBundledAssets(): ResolvedAssets {
   return {
-    claude: {
+    claudeCode: {
       stop: resolveAsset([
         "libexec/claude-code/hooks/stop.sh",
         "claude-code/hooks/stop.sh",
@@ -200,9 +200,9 @@ function installClaudeCode(env: InstallEnvironment): string[] {
   const notificationTarget = join(claudeHooksDir, "notification.sh")
   const permissionTarget = join(claudeHooksDir, "permission_request.sh")
 
-  copyFile(env.assets.claude.stop, stopTarget, 0o755)
-  copyFile(env.assets.claude.notification, notificationTarget, 0o755)
-  copyFile(env.assets.claude.permissionRequest, permissionTarget, 0o755)
+  copyFile(env.assets.claudeCode.stop, stopTarget, 0o755)
+  copyFile(env.assets.claudeCode.notification, notificationTarget, 0o755)
+  copyFile(env.assets.claudeCode.permissionRequest, permissionTarget, 0o755)
 
   const settingsPath = join(env.homeDir, ".claude", "settings.json")
   const settings = readJson(settingsPath)
@@ -217,7 +217,7 @@ function installClaudeCode(env: InstallEnvironment): string[] {
 
   for (const [eventName, command, matcher] of targets) {
     const scriptName = command.split("/").at(-1) ?? ""
-    const current = Array.isArray(hooks[eventName]) ? hooks[eventName] as ClaudeHookMatcher[] : []
+    const current = Array.isArray(hooks[eventName]) ? hooks[eventName] as ClaudeCodeHookMatcher[] : []
 
     if (current.some((entry) => Array.isArray(entry.hooks) && entry.hooks.some((hook) => hook.command === command))) {
       hooks[eventName] = current
@@ -254,7 +254,7 @@ function installClaudeCode(env: InstallEnvironment): string[] {
 
   const messages = [
     `Claude Code hooks installed in ${settingsPath}`,
-    `Claude hook scripts copied to ${claudeHooksDir}`,
+    `Claude Code hook scripts copied to ${claudeHooksDir}`,
   ]
 
   if (!hasCommand("jq")) {
@@ -264,7 +264,7 @@ function installClaudeCode(env: InstallEnvironment): string[] {
   return messages
 }
 
-function pruneEmptyHookGroups(items: ClaudeHookMatcher[]): ClaudeHookMatcher[] {
+function pruneEmptyHookGroups(items: ClaudeCodeHookMatcher[]): ClaudeCodeHookMatcher[] {
   return items.filter((item) => Array.isArray(item.hooks) && item.hooks.length > 0)
 }
 
@@ -284,7 +284,7 @@ function uninstallClaudeCode(homeDir: string): string[] {
     ]
 
     for (const [eventName, scriptName] of targets) {
-      const current = Array.isArray(hooks[eventName]) ? hooks[eventName] as ClaudeHookMatcher[] : []
+      const current = Array.isArray(hooks[eventName]) ? hooks[eventName] as ClaudeCodeHookMatcher[] : []
       const next = pruneEmptyHookGroups(current.map((entry) => ({
         ...entry,
         hooks: (Array.isArray(entry.hooks) ? entry.hooks : []).filter((hook) => !isClaudeAgentNotifyCommand(hook.command, scriptName)),

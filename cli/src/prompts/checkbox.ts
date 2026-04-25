@@ -115,6 +115,13 @@ function normalizeChoices<V>(
   })
 }
 
+function findLastSelectableIndex<V>(items: Array<NormalizedChoice<V> | Separator>): number {
+  for (let i = items.length - 1; i >= 0; i -= 1) {
+    if (isSelectable(items[i])) return i
+  }
+  return -1
+}
+
 // ---- Prompt ----------------------------------------------------------------
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -130,7 +137,7 @@ export const checkbox: <V>(config: CheckboxConfig<V>) => Promise<V[] | typeof CA
     )
     const bounds = useMemo(() => {
       const first = items.findIndex(isSelectable)
-      const last = items.findLastIndex(isSelectable)
+      const last = findLastSelectableIndex(items)
       if (first === -1) {
         throw new ValidationError("[checkbox] No selectable choices. All choices are disabled.")
       }

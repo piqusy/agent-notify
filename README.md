@@ -8,9 +8,10 @@ AI agents can take minutes on complex tasks. Instead of watching the terminal, y
 
 ## Features
 
-- Native macOS notifications (terminal-notifier or osascript)
+- Native macOS notifications via a bundled helper app (with legacy fallbacks)
 - Three event types: **done**, **question**, **permission request**
 - Configurable sound per event (with live preview in the setup wizard)
+- Bundled Agent Notify app icon on macOS
 - Quiet hours
 - Cooldown to avoid notification spam
 - Focus detection — skips notification if your terminal is already in focus
@@ -61,16 +62,16 @@ Run the interactive wizard:
 agent-notify init
 ```
 
-This walks you through backend selection, terminal app focus detection, quiet hours, sound selection (with live preview), and which events to enable.
+This walks you through backend selection, terminal app focus detection, quiet hours, sound selection (with live preview), and event selection.
 
 Config is saved to `~/.config/agent-notify/config.json`.
 
 ## Usage
 
 ```sh
-agent-notify done              # send a "done" notification
-agent-notify question          # send a "question" notification
-agent-notify test done         # send a test notification
+agent-notify done                              # send a "done" notification
+agent-notify question                          # send a "question" notification
+agent-notify test done                         # send a test notification
 agent-notify sounds            # list available sounds
 agent-notify sounds --play Morse
 agent-notify init              # re-run setup wizard
@@ -151,7 +152,7 @@ agent-notify uninstall pi
 ```
 
 `terminalApp: null` — auto-detected via `$TERM_PROGRAM`. Set to e.g. `"iTerm2"` to override.  
-`backend: null` — auto-detected (prefers `terminal-notifier` if installed, falls back to `osascript`).  
+`backend: null` — auto-detected. On modern macOS this prefers the bundled native helper app, then falls back to `terminal-notifier`, then `osascript`.  
 `sounds.permission: null` — falls back to the question sound.  
 `quietHours: null` — disables quiet hours entirely (sounds play at all times).
 
@@ -159,7 +160,8 @@ agent-notify uninstall pi
 
 - macOS
 - [bun](https://bun.sh) (for source install only — Homebrew install is standalone)
-- [terminal-notifier](https://github.com/julienXX/terminal-notifier) (optional, for richer notifications — `brew install terminal-notifier`)
+- Xcode Command Line Tools / Swift (for source install on macOS so the helper app can be built)
+- [terminal-notifier](https://github.com/julienXX/terminal-notifier) (optional legacy fallback only — `brew install terminal-notifier`)
 
 ## Troubleshooting
 
@@ -169,7 +171,7 @@ Run the built-in diagnostic tool:
 agent-notify doctor
 ```
 
-It checks config validity, backend detection, notification permissions, focus state, quiet hours, and sound files in one pass.
+It checks config validity, backend detection, notification permissions, focus state, quiet hours, helper availability, and sound files in one pass.
 
 ## Local testing
 
@@ -185,20 +187,21 @@ For Pi specifically, rerun `./install.sh` after editing `packages/pi-coding-agen
 
 ### No notifications appear
 
-- **macOS notification permissions** — the most common issue. Open **System Settings → Notifications → terminal-notifier** and enable **Allow Notifications**. Set the alert style to **Banners** or **Alerts**.
-- **Backend not installed** — if using `terminal-notifier` (recommended), install it: `brew install terminal-notifier`.
+- **macOS notification permissions** — the most common issue. Open **System Settings → Notifications → Agent Notify** and enable **Allow Notifications**. Set the alert style to **Banners** or **Alerts**.
+- **Native helper missing** — if you installed from source on macOS, rerun `bun run build` and make sure the helper app was built successfully.
+- **Legacy backend fallback** — if you explicitly use `terminal-notifier`, install it with: `brew install terminal-notifier`.
 - **Focus detection** — if your terminal is the frontmost app, notifications are suppressed by design. Switch to another app or set `"terminalApp": null` in config to disable focus detection entirely.
 
 ### No sound
 
-- Check that **Sounds** is toggled on in **System Settings → Notifications → terminal-notifier**.
+- Check that **Sounds** is toggled on in **System Settings → Notifications → Agent Notify**.
 - Check that your system volume is not muted.
 - Verify your sound config refers to a valid built-in name: `agent-notify sounds`.
 - During quiet hours, sounds are muted (notifications still appear silently).
 
-### macOS Sequoia (15.x)
+### macOS Sequoia / Tahoe
 
-Sequoia restricts some notification APIs. Use `terminal-notifier` as the backend — `osascript` notifications may not work. Install it with `brew install terminal-notifier`.
+On modern macOS, agent-notify uses its bundled native helper app by default. This is the recommended path for reliable notifications and the branded Agent Notify app icon. `terminal-notifier` remains available only as a legacy fallback.
 
 ### "Sent test notification" but nothing appeared
 

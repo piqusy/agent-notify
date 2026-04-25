@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("child_process");
 
 import { sendNotification } from "../platform/index.js";
+import { sendMacOS } from "../platform/macos.js";
+import { sendLinux } from "../platform/linux.js";
 import * as cp from "child_process";
 
 const mockConfig = {
@@ -10,8 +12,8 @@ const mockConfig = {
   terminalApp: null,
   cooldownSeconds: 3,
   quietHours: { start: 22, end: 8 },
-  sounds: { done: "Morse", question: "Submarine" },
-  events: { done: true, question: true },
+  sounds: { done: "Morse", question: "Submarine", permission: null },
+  events: { done: true, question: true, permission: true },
 };
 
 describe("sendNotification", () => {
@@ -47,5 +49,29 @@ describe("sendNotification", () => {
     await expect(
       sendNotification({ title: "Test", body: "body" }, mockConfig)
     ).resolves.not.toThrow();
+  });
+
+  it("launches the macos helper app when that backend is selected", () => {
+    sendMacOS(
+      { title: "Test", body: "body", sound: "Morse" },
+      "macos-helper",
+      { helperAppPath: "/tmp/AgentNotify.app" },
+    );
+
+    expect(cp.spawnSync).toHaveBeenCalledWith(
+      "open",
+      ["-n", "/tmp/AgentNotify.app", "--args", "--title", "Test", "--body", "body", "--sound", "Morse"],
+      { stdio: "ignore" }
+    );
+  });
+
+  it("uses plain notify-send on linux", () => {
+    sendLinux({ title: "Test", body: "body" });
+
+    expect(cp.spawnSync).toHaveBeenCalledWith(
+      "notify-send",
+      ["Test", "body"],
+      { stdio: "ignore" }
+    );
   });
 });

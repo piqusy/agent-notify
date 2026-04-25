@@ -16,10 +16,10 @@ function write(path: string, content: string): string {
 
 function createAssets(root: string) {
   return {
-    claude: {
-      stop: write(join(root, "assets", "claude", "stop.sh"), "#!/usr/bin/env bash\n"),
-      notification: write(join(root, "assets", "claude", "notification.sh"), "#!/usr/bin/env bash\n"),
-      permissionRequest: write(join(root, "assets", "claude", "permission_request.sh"), "#!/usr/bin/env bash\n"),
+    claudeCode: {
+      stop: write(join(root, "assets", "claude-code", "stop.sh"), "#!/usr/bin/env bash\n"),
+      notification: write(join(root, "assets", "claude-code", "notification.sh"), "#!/usr/bin/env bash\n"),
+      permissionRequest: write(join(root, "assets", "claude-code", "permission_request.sh"), "#!/usr/bin/env bash\n"),
     },
     opencode: {
       indexJs: write(join(root, "assets", "opencode", "index.js"), "export default {}\n"),

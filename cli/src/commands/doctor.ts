@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process"
+import { execFileSync, execSync } from "node:child_process"
 import { existsSync, readFileSync } from "node:fs"
 import {
   defaultConfigPath,
@@ -7,9 +7,11 @@ import {
   isTerminalFocused,
   isQuietHour,
   detectMacOSBackend,
+  findMacOSHelperApp,
+  findMacOSHelperBinary,
   BUILTIN_SOUNDS,
 } from "@agent-notify/core"
-import type { Config } from "@agent-notify/core"
+import type { Config, NotifyBackend } from "@agent-notify/core"
 
 const OK = "\u2713"
 const WARN = "!"
@@ -39,13 +41,7 @@ function checkTerminalNotifierInstalled(): string | null {
   return null
 }
 
-/**
- * Reads macOS notification center preferences and checks whether
- * terminal-notifier has notifications enabled.
- *
- * Returns: true = enabled, false = disabled, null = can't determine.
- */
-function checkNotificationPermission(): { enabled: boolean | null; detail: string } {
+function checkTerminalNotifierPermission(): { enabled: boolean | null; detail: string } {
   if (process.platform !== "darwin") {
     return { enabled: null, detail: "Not macOS — skipped" }
   }
@@ -56,7 +52,6 @@ function checkNotificationPermission(): { enabled: boolean | null; detail: strin
       timeout: 5000,
     })
 
-    // Look for terminal-notifier bundle ID in the plist output
     const bundleIds = [
       "fr.julienxx.oss.terminal-notifier",
       "nl.superalloy.oss.terminal-notifier",
@@ -66,27 +61,13 @@ function checkNotificationPermission(): { enabled: boolean | null; detail: strin
       const idx = raw.indexOf(bundleId)
       if (idx === -1) continue
 
-      // The plist entry looks like:
-      //   "bundle-id" = "...terminal-notifier";
-      //   flags = <top-level, layout varies by macOS version>;
-      //   src = (
-      //       {
-      //       flags = 1;   ← bit 0 here reliably means "notifications enabled"
-      //       ...
-      //       }
-      //   );
-      // We target the flags inside the src block, not the top-level flags,
-      // because the top-level flags bitmask layout is undocumented and changes
-      // across macOS versions.
       const chunk = raw.slice(idx, idx + 800)
       const srcBlockMatch = chunk.match(/\bsrc\s*=\s*\([\s\S]*?flags\s*=\s*(\d+)/)
       if (!srcBlockMatch) {
-        // Fallback: no src block found — entry exists but state is unknown
         return { enabled: null, detail: `terminal-notifier found but permission state unclear (bundle: ${bundleId})` }
       }
 
       const flags = parseInt(srcBlockMatch[1], 10)
-      // Bit 0 of src[].flags: 1 = notifications enabled
       const enabled = (flags & 1) === 1
       return {
         enabled,
@@ -102,23 +83,64 @@ function checkNotificationPermission(): { enabled: boolean | null; detail: strin
   }
 }
 
+function checkMacOSHelperPermission(): { enabled: boolean | null; detail: string } {
+  const helperBinary = findMacOSHelperBinary()
+  if (!helperBinary) {
+    return { enabled: null, detail: "Native helper binary not found" }
+  }
+
+  try {
+    const status = execFileSync(helperBinary, ["--permission-status"], {
+      encoding: "utf8",
+      timeout: 5000,
+    }).trim()
+
+    if (status === "authorized" || status === "provisional" || status === "ephemeral") {
+      return { enabled: true, detail: `Notifications allowed (${status})` }
+    }
+    if (status === "denied") {
+      return { enabled: false, detail: "Notifications DISABLED for Agent Notify" }
+    }
+    if (status === "notDetermined") {
+      return { enabled: null, detail: "Permission not requested yet — send a test notification to trigger the prompt" }
+    }
+
+    return { enabled: null, detail: `Unknown helper status: ${status || "(empty)"}` }
+  } catch (error) {
+    return {
+      enabled: null,
+      detail: `Could not query helper permission status: ${error instanceof Error ? error.message : String(error)}`,
+    }
+  }
+}
+
 function checkSoundFile(soundName: string | null): { found: boolean; path: string | null } {
-  if (!soundName) return { found: true, path: null } // null = silent, which is valid
+  if (!soundName) return { found: true, path: null }
   const p = `/System/Library/Sounds/${soundName}.aiff`
   return { found: existsSync(p), path: p }
+}
+
+function describeIconBehavior(backend: NotifyBackend | null): { level: "ok" | "warn"; detail: string } {
+  if (process.platform === "darwin") {
+    if (backend === "macos-helper") {
+      return { level: "ok", detail: "Bundled Agent Notify app icon will be used" }
+    }
+    return { level: "warn", detail: "Legacy macOS backends use their sender/default icon" }
+  }
+
+  return { level: "ok", detail: "Platform default icon will be used" }
 }
 
 export async function cmdDoctor(): Promise<void> {
   console.log("agent-notify doctor")
   console.log("====================\n")
 
-  // 1. Config
   const configExists = existsSync(defaultConfigPath)
   let config: Config | null = null
   if (configExists) {
     try {
       const raw = readFileSync(defaultConfigPath, "utf8")
-      JSON.parse(raw) // validate JSON
+      JSON.parse(raw)
       config = await loadConfig(defaultConfigPath)
       line(OK, "Config", defaultConfigPath)
     } catch (e) {
@@ -134,49 +156,58 @@ export async function cmdDoctor(): Promise<void> {
     return
   }
 
-  // 2. macOS version
   const macVer = getMacOSVersion()
   if (macVer) {
-    if (macVer.startsWith("15.")) {
-      line(WARN, "macOS", `${macVer} (Sequoia) — some notification APIs restricted`)
-    } else {
-      line(OK, "macOS", macVer)
-    }
+    line(OK, "macOS", macVer)
   } else {
     line(OK, "Platform", process.platform)
   }
 
-  // 3. Backend detection
+  let resolvedBackend: NotifyBackend | null = null
   if (process.platform === "darwin") {
-    // Suppress the Sequoia stderr warning from detectMacOSBackend — we already report macOS version above
     const origStderrWrite = process.stderr.write
     process.stderr.write = (() => true) as typeof process.stderr.write
-    const backend = await detectMacOSBackend(config.backend)
+    resolvedBackend = await detectMacOSBackend(config.backend)
     process.stderr.write = origStderrWrite
+
+    const helperApp = findMacOSHelperApp()
     const tnPath = checkTerminalNotifierInstalled()
-    if (config.backend) {
-      line(OK, "Backend", `${backend} (explicit override)`)
-    } else if (tnPath) {
-      line(OK, "Backend", `${backend} (auto-detected at ${tnPath})`)
+    if (resolvedBackend === "macos-helper") {
+      if (helperApp) {
+        line(OK, "Backend", `${resolvedBackend}${config.backend ? " (explicit override)" : " (auto-detected)"} — ${helperApp}`)
+      } else {
+        line(FAIL, "Backend", "macos-helper selected but bundled helper app was not found")
+      }
+    } else if (resolvedBackend === "terminal-notifier") {
+      if (tnPath) {
+        line(OK, "Backend", `${resolvedBackend}${config.backend ? " (explicit override)" : " (auto-detected)"} — ${tnPath}`)
+      } else {
+        line(WARN, "Backend", `${resolvedBackend} selected but terminal-notifier is not installed`) 
+      }
     } else {
-      line(WARN, "Backend", `${backend} (terminal-notifier not installed — consider: brew install terminal-notifier)`)
+      line(WARN, "Backend", `${resolvedBackend}${config.backend ? " (explicit override)" : " (auto-detected fallback)"}`)
     }
 
-    // 4. Notification permissions (only relevant for terminal-notifier)
-    if (backend === "terminal-notifier") {
-      const perms = checkNotificationPermission()
-      if (perms.enabled === true) {
-        line(OK, "Permissions", perms.detail)
-      } else if (perms.enabled === false) {
-        line(FAIL, "Permissions", perms.detail)
+    const perms = resolvedBackend === "macos-helper"
+      ? checkMacOSHelperPermission()
+      : resolvedBackend === "terminal-notifier"
+        ? checkTerminalNotifierPermission()
+        : { enabled: null, detail: "Backend does not expose permission status" }
+
+    if (perms.enabled === true) {
+      line(OK, "Permissions", perms.detail)
+    } else if (perms.enabled === false) {
+      line(FAIL, "Permissions", perms.detail)
+      if (resolvedBackend === "macos-helper") {
+        console.log("                    → Open System Settings > Notifications > Agent Notify > Allow Notifications")
+      } else if (resolvedBackend === "terminal-notifier") {
         console.log("                    → Open System Settings > Notifications > terminal-notifier > Allow Notifications")
-      } else {
-        line(WARN, "Permissions", perms.detail)
       }
+    } else {
+      line(WARN, "Permissions", perms.detail)
     }
   }
 
-  // 5. Focus detection
   const termProgram = process.env.TERM_PROGRAM ?? ""
   const termApp = config.terminalApp ?? resolveTerminalApp(termProgram)
   if (termApp) {
@@ -190,7 +221,6 @@ export async function cmdDoctor(): Promise<void> {
     line(WARN, "Focus", `Could not detect terminal app (TERM_PROGRAM=${termProgram || "(empty)"}) — focus check skipped`)
   }
 
-  // 6. Quiet hours
   if (config.quietHours === null) {
     line(OK, "Quiet hours", "Disabled")
   } else {
@@ -203,7 +233,6 @@ export async function cmdDoctor(): Promise<void> {
     }
   }
 
-  // 7. Events
   const enabled = Object.entries(config.events)
     .filter(([, v]) => v)
     .map(([k]) => k)
@@ -216,7 +245,13 @@ export async function cmdDoctor(): Promise<void> {
     line(WARN, "Events", `Enabled: ${enabled.join(", ")} | Disabled: ${disabled.join(", ")}`)
   }
 
-  // 8. Sounds
+  const iconInfo = describeIconBehavior(resolvedBackend)
+  if (iconInfo.level === "ok") {
+    line(OK, "Icon", iconInfo.detail)
+  } else {
+    line(WARN, "Icon", iconInfo.detail)
+  }
+
   for (const key of ["done", "question", "permission"] as const) {
     const soundName = config.sounds[key]
     if (soundName === null && key === "permission") {
@@ -227,6 +262,12 @@ export async function cmdDoctor(): Promise<void> {
       line(OK, `Sound/${key}`, "Silent")
       continue
     }
+
+    if (process.platform === "darwin" && BUILTIN_SOUNDS.includes(soundName as (typeof BUILTIN_SOUNDS)[number])) {
+      line(OK, `Sound/${key}`, `${soundName} (built-in macOS sound)`)
+      continue
+    }
+
     const { found, path } = checkSoundFile(soundName)
     if (found) {
       line(OK, `Sound/${key}`, `${soundName} → ${path}`)
@@ -235,8 +276,6 @@ export async function cmdDoctor(): Promise<void> {
     }
   }
 
-  // 9. Cooldown
   line(OK, "Cooldown", `${config.cooldownSeconds}s between notifications per tool`)
-
   console.log("")
 }

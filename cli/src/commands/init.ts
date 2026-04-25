@@ -30,6 +30,7 @@ const TERMINAL_CHOICES: Array<{ name: string; value: string | null }> = [
 
 const BACKEND_CHOICES: Array<{ name: string; value: NotifyBackend | null }> = [
   { name: "Auto-detect (recommended)", value: null },
+  { name: "macos-helper (native app, recommended on modern macOS)", value: "macos-helper" },
   { name: "terminal-notifier", value: "terminal-notifier" },
   { name: "osascript (macOS built-in)", value: "osascript" },
   { name: "notify-send (Linux)", value: "notify-send" },
@@ -56,19 +57,11 @@ export async function cmdInit(): Promise<void> {
   console.log("agent-notify setup wizard")
   console.log("=========================\n")
 
-  // --- macOS Sequoia check ---
+  // --- macOS note ---
   const macVersion = detectMacOSVersion()
-  if (macVersion?.startsWith("15.")) {
-    console.log(`macOS Sequoia ${macVersion} detected.`)
-    const hasTN = checkTerminalNotifier()
-    if (!hasTN) {
-      console.log(
-        "  Sequoia restricts notification APIs. terminal-notifier is recommended:\n" +
-        "  brew install terminal-notifier\n"
-      )
-    } else {
-      console.log("  terminal-notifier found. Good.\n")
-    }
+  if (macVersion) {
+    console.log(`macOS ${macVersion} detected.`)
+    console.log("  Native helper backend is recommended on modern macOS.\n")
   }
 
   // --- Backend ---
@@ -111,11 +104,12 @@ export async function cmdInit(): Promise<void> {
     default: true,
   }))
 
-  let quietHours: typeof defaultConfig.quietHours | null = defaultConfig.quietHours
+  const defaultQuietHours = defaultConfig.quietHours ?? { start: 22, end: 8 }
+  let quietHours: typeof defaultConfig.quietHours | null = defaultQuietHours
   if (quietHoursEnabled) {
     const startStr = await ask(input({
       message: "Quiet hours start (0–23)",
-      default: String(defaultConfig.quietHours.start),
+      default: String(defaultQuietHours.start),
       validate: (v) => {
         const n = parseInt(v, 10)
         return (!isNaN(n) && n >= 0 && n <= 23) || "Enter a number 0–23"
@@ -123,7 +117,7 @@ export async function cmdInit(): Promise<void> {
     }))
     const endStr = await ask(input({
       message: "Quiet hours end (0–23)",
-      default: String(defaultConfig.quietHours.end),
+      default: String(defaultQuietHours.end),
       validate: (v) => {
         const n = parseInt(v, 10)
         return (!isNaN(n) && n >= 0 && n <= 23) || "Enter a number 0–23"
@@ -205,6 +199,9 @@ export async function cmdInit(): Promise<void> {
   }
   if (config.quietHours === null) {
     hints.push("  quietHours: null → quiet hours disabled, sounds play at all times")
+  }
+  if (process.platform === "darwin") {
+    hints.push("  macOS uses the bundled native helper app icon")
   }
   if (hints.length > 0) console.log(hints.join("\n"))
 

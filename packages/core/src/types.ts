@@ -1,6 +1,6 @@
 export type NotifyState = "done" | "question"
 
-export type NotifyBackend = "terminal-notifier" | "osascript" | "notify-send" | "powershell"
+export type NotifyBackend = "macos-helper" | "terminal-notifier" | "osascript" | "notify-send" | "powershell"
 
 export interface QuietHours {
   start: number   // 0–23, inclusive

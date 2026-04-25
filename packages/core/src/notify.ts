@@ -94,7 +94,11 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
         return resolveSound(soundKey) ?? undefined
       })()
 
-  const payload: NotifyPayload = { title, body, ...(sound ? { sound } : {}) }
+  const payload: NotifyPayload = {
+    title,
+    body,
+    ...(sound ? { sound } : {}),
+  }
 
   // 6. Zellij tab icon — mark the background tab before macOS notification shows
   if (isZellijSession()) {

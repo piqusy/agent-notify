@@ -20,7 +20,9 @@ class AgentNotify < Formula
 
   def install
     bin.install "bin/agent-notify"
-    libexec.install "opencode-agent-notify", "claude-code", "pi-coding-agent"
+    # AgentNotify.app is already signed in the release artifact.
+    # Preserve that signature so macOS notification permissions stay tied to a stable app identity.
+    libexec.install "opencode-agent-notify", "claude-code", "pi-coding-agent", "agent-notify-helper"
   end
 
   test do

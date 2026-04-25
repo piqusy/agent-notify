@@ -9,23 +9,30 @@ import { CLI_VERSION } from "./version.js";
 
 const [, , command, ...args] = process.argv;
 
-function parseToolFlag(args: string[]): { tool: string; rest: string[] } {
-  const idx = args.indexOf("--tool");
+function parseStringFlag(args: string[], flag: string): { value?: string; rest: string[] } {
+  const idx = args.indexOf(flag);
   if (idx !== -1 && args[idx + 1]) {
-    const rest = args.filter((_, i) => i !== idx && i !== idx + 1);
-    return { tool: args[idx + 1], rest };
+    return {
+      value: args[idx + 1],
+      rest: args.filter((_, i) => i !== idx && i !== idx + 1),
+    };
   }
-  return { tool: "cli", rest: args };
+  return { rest: args };
+}
+
+function parseNotifyFlags(args: string[]): { tool: string; rest: string[] } {
+  const { value: tool, rest } = parseStringFlag(args, "--tool");
+  return { tool: tool ?? "cli", rest };
 }
 
 async function cmdDone(rawArgs: string[]): Promise<void> {
-  const { tool, rest } = parseToolFlag(rawArgs);
+  const { tool, rest } = parseNotifyFlags(rawArgs);
   const dir = rest[0];
   await notify({ state: "done", tool, cwd: dir ?? process.cwd() });
 }
 
 async function cmdQuestion(rawArgs: string[]): Promise<void> {
-  const { tool, rest } = parseToolFlag(rawArgs);
+  const { tool, rest } = parseNotifyFlags(rawArgs);
   const dir = rest[0];
   await notify({ state: "question", tool, cwd: dir ?? process.cwd() });
 }
@@ -34,7 +41,8 @@ async function cmdTest(subArgs: string[]): Promise<void> {
   const type = subArgs.find((a) => !a.startsWith("-"));
   const force = subArgs.includes("--force") || subArgs.includes("-f");
   const state = type === "question" ? "question" : "done";
-  const result = await notify({ state, tool: "test", cwd: process.cwd(), force });
+  const uniqueTestCwd = `${process.cwd()}/agent-notify-test-${Date.now()}`;
+  const result = await notify({ state, tool: "test", cwd: uniqueTestCwd, force });
   if (result.sent) {
     console.log(`Sent test notification: ${state}${force ? " (forced)" : ""}`);
   } else {
@@ -68,9 +76,12 @@ function printHelp(): void {
   console.log(`agent-notify — send desktop notifications from AI agents
 
 Usage:
-  agent-notify done [dir] [--tool <name>]           Send a "done" notification
-  agent-notify question [dir] [--tool <name>]       Send a "question/waiting" notification
-  agent-notify test [done|question] [--force|-f]    Send a test notification (--force bypasses focus/cooldown)
+  agent-notify done [dir] [--tool <name>]
+                                          Send a "done" notification
+  agent-notify question [dir] [--tool <name>]
+                                          Send a "question/waiting" notification
+  agent-notify test [done|question] [--force|-f]
+                                          Send a test notification (--force bypasses focus/cooldown)
   agent-notify sounds                      List available notification sounds
   agent-notify sounds --play <name>        Play a sound by name
   agent-notify init                        Interactive setup wizard

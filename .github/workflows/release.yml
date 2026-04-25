@@ -64,6 +64,11 @@ jobs:
           cp packages/pi-coding-agent/README.md dist/${{ matrix.outfile }}/pi-coding-agent/
           cp packages/pi-coding-agent/src/agent-notify.ts dist/${{ matrix.outfile }}/pi-coding-agent/
 
+      - name: Stage macOS helper app (${{ matrix.arch }})
+        run: |
+          mkdir -p dist/${{ matrix.outfile }}/agent-notify-helper
+          cp -R packages/macos-helper/dist/AgentNotify.app dist/${{ matrix.outfile }}/agent-notify-helper/
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

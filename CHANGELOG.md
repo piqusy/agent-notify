@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.31] — 2026-04-25
+
+### Added
+- Native macOS notification delivery now uses a bundled `AgentNotify.app` helper backed by `UNUserNotificationCenter`, including the branded Agent Notify app icon on modern macOS
+- Release docs now include a macOS helper checklist covering bundle identity, signing, packaging, and post-install verification
+
+### Changed
+- Removed custom notification icon configuration and CLI overrides; macOS now always uses the bundled Agent Notify app icon and other platforms use their default icon
+- Homebrew and release artifacts now ship the macOS helper app directly without re-signing it at install time, preserving a stable notification app identity
+
 ## [0.1.30] — 2026-04-24
 
 ### Added

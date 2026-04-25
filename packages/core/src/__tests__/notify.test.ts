@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import { describe, it, expect, vi, afterEach } from "vitest"
 
 vi.mock("../config.js", () => ({
   loadConfig: vi.fn(async () => ({
@@ -6,7 +6,8 @@ vi.mock("../config.js", () => ({
     terminalApp: null,
     cooldownSeconds: 0,
     quietHours: null,
-    sounds: {},
+    sounds: { done: null, question: null, permission: null },
+    backend: null,
   })),
 }))
 
@@ -26,7 +27,6 @@ import * as platform from "../platform/index.js"
 
 describe("isQuietHour", () => {
   it("returns false outside quiet hours (no wrap)", () => {
-    // quiet 22-8: hour 12 should be false
     expect(isQuietHour({ start: 22, end: 8 })).toBe(
       new Date().getHours() >= 22 || new Date().getHours() < 8
     )
