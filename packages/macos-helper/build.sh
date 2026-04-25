@@ -11,6 +11,7 @@ OUT_DIR="$ROOT_DIR/packages/macos-helper/dist"
 APP_DIR="$OUT_DIR/${APP_NAME}.app"
 ICONSET_DIR="/tmp/${APP_NAME}.iconset"
 ICNS_PATH="/tmp/${APP_NAME}.icns"
+BUILD_TMP_DIR="/tmp/${APP_NAME}-build"
 
 if [[ "$(uname -s)" != "Darwin" ]]; then
   echo "Skipping macOS helper build on non-macOS"
@@ -18,8 +19,8 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
 fi
 
 mkdir -p "$OUT_DIR"
-rm -rf "$APP_DIR" "$ICONSET_DIR" "$ICNS_PATH"
-mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources" "$ICONSET_DIR"
+rm -rf "$APP_DIR" "$ICONSET_DIR" "$ICNS_PATH" "$BUILD_TMP_DIR"
+mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources" "$ICONSET_DIR" "$BUILD_TMP_DIR"
 
 cat > "$APP_DIR/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -49,8 +50,28 @@ done
 iconutil --convert icns --output "$ICNS_PATH" "$ICONSET_DIR"
 cp "$ICNS_PATH" "$APP_DIR/Contents/Resources/${APP_NAME}.icns"
 
-swiftc "$SRC_PATH" -o "$APP_DIR/Contents/MacOS/${APP_NAME}" -framework Cocoa -framework UserNotifications
-chmod +x "$APP_DIR/Contents/MacOS/${APP_NAME}"
+SDK_PATH="$(xcrun --sdk macosx --show-sdk-path)"
+MACOS_VERSION="$(sw_vers -productVersion)"
+TARGET_VERSION="$(echo "$MACOS_VERSION" | cut -d. -f1-2)"
+ARM_BINARY="$BUILD_TMP_DIR/${APP_NAME}-arm64"
+X64_BINARY="$BUILD_TMP_DIR/${APP_NAME}-x86_64"
+UNIVERSAL_BINARY="$APP_DIR/Contents/MacOS/${APP_NAME}"
+
+swiftc "$SRC_PATH" \
+  -target "arm64-apple-macos${TARGET_VERSION}" \
+  -sdk "$SDK_PATH" \
+  -o "$ARM_BINARY" \
+  -framework Cocoa -framework UserNotifications
+
+swiftc "$SRC_PATH" \
+  -target "x86_64-apple-macos${TARGET_VERSION}" \
+  -sdk "$SDK_PATH" \
+  -o "$X64_BINARY" \
+  -framework Cocoa -framework UserNotifications
+
+lipo -create -output "$UNIVERSAL_BINARY" "$ARM_BINARY" "$X64_BINARY"
+chmod +x "$UNIVERSAL_BINARY"
 codesign --force --deep --sign - "$APP_DIR" >/dev/null
 
 echo "Built macOS helper: $APP_DIR"
+file "$UNIVERSAL_BINARY"

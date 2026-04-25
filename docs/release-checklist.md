@@ -9,6 +9,7 @@ The macOS notification path depends on `AgentNotify.app` shipped inside the rele
 - Keep the bundle ID stable: `io.github.piqusy.agentnotify`
 - Keep the app name stable: `AgentNotify.app`
 - Build the helper on macOS only
+- Build the helper as a universal binary (`arm64` + `x86_64`)
 - Sign the helper during the macOS build step
 - Do **not** re-sign the helper in the Homebrew formula
 
