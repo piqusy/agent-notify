@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.34] — 2026-04-25
+
+### Fixed
+- Stop trusting `process.cwd()` for macOS helper discovery and bundled integration asset lookup, blocking malicious repositories from hijacking helper apps, Claude Code hooks, OpenCode plugins, or Pi extensions during runtime or install
+- Replace Zellij tab rename shell interpolation with argv-safe process execution and validate install home directories before writing integration files
+
+### Changed
+- Upgrade dev tooling to `vitest@4.1.5` and `postcss@8.5.10`, clearing audit findings
+- Harden GitHub Actions by pinning action SHAs, using frozen lockfiles in CI, disabling credential persistence, and scoping workflow permissions more tightly
+
 ## [0.1.33] — 2026-04-25
 
 ### Changed

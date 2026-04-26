@@ -1,15 +1,23 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 vi.mock("child_process");
 vi.mock("fs");
 
-import { detectMacOSBackend } from "../platform/detect.js";
+import { detectMacOSBackend, findMacOSHelperApp } from "../platform/detect.js";
 import * as cp from "child_process";
 import * as fs from "fs";
 
 describe("detectMacOSBackend", () => {
+  const originalCwd = process.cwd();
+
   beforeEach(() => {
     vi.resetAllMocks();
+  });
+
+  afterEach(() => {
+    process.chdir(originalCwd);
   });
 
   it("returns override if provided", async () => {
@@ -35,5 +43,15 @@ describe("detectMacOSBackend", () => {
     await detectMacOSBackend(null);
     expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining("falling back to osascript"));
     stderrSpy.mockRestore();
+  });
+
+  it("does not trust helper apps found only under process.cwd", () => {
+    const tempRoot = tmpdir();
+    const fakeApp = join(tempRoot, "packages", "macos-helper", "dist", "AgentNotify.app");
+    process.chdir(tempRoot);
+
+    vi.mocked(fs.existsSync).mockImplementation((path) => String(path) === fakeApp);
+
+    expect(findMacOSHelperApp()).toBeNull();
   });
 });

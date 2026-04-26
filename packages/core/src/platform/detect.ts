@@ -25,16 +25,15 @@ function ancestorDirs(start: string): string[] {
   return dirs;
 }
 
-function candidateRoots(): string[] {
+function trustedCandidateRoots(): string[] {
   return unique([
-    ...ancestorDirs(process.cwd()),
     ...ancestorDirs(MODULE_DIR),
     ...ancestorDirs(dirname(process.execPath)),
   ]);
 }
 
 export function findMacOSHelperApp(): string | null {
-  const candidates = unique(candidateRoots().flatMap((root) => [
+  const candidates = unique(trustedCandidateRoots().flatMap((root) => [
     join(root, "packages", "macos-helper", "dist", "AgentNotify.app"),
     join(root, "agent-notify-helper", "AgentNotify.app"),
     join(root, "libexec", "agent-notify-helper", "AgentNotify.app"),

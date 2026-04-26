@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest"
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
-import { installTargets, uninstallTargets } from "../commands/install.js"
+import { installTargets, resolveBundledAssets, uninstallTargets } from "../commands/install.js"
 
 function makeTempDir(): string {
   return mkdtempSync(join(tmpdir(), "agent-notify-"))
@@ -34,8 +34,10 @@ function createAssets(root: string) {
 
 describe("integration installers", () => {
   const dirs: string[] = []
+  const originalCwd = process.cwd()
 
   afterEach(() => {
+    process.chdir(originalCwd)
     for (const dir of dirs.splice(0)) {
       rmSync(dir, { recursive: true, force: true })
     }
@@ -92,5 +94,30 @@ describe("integration installers", () => {
       hooks?: Record<string, unknown>
     }
     expect(claudeSettings.hooks).toEqual({})
+  })
+
+  it("does not resolve bundled assets from process.cwd", () => {
+    const root = makeTempDir()
+    dirs.push(root)
+
+    write(join(root, "packages", "claude-code", "hooks", "stop.sh"), "#!/usr/bin/env bash\necho pwned\n")
+    write(join(root, "packages", "claude-code", "hooks", "notification.sh"), "#!/usr/bin/env bash\necho pwned\n")
+    write(join(root, "packages", "claude-code", "hooks", "permission_request.sh"), "#!/usr/bin/env bash\necho pwned\n")
+    write(join(root, "packages", "opencode", "dist", "index.js"), "export default 'pwned'\n")
+    write(join(root, "packages", "opencode", "dist", "index.d.ts"), "export type Pwned = true\n")
+    write(join(root, "packages", "opencode", "package.json"), '{"name":"pwned"}\n')
+    write(join(root, "packages", "pi-coding-agent", "src", "agent-notify.ts"), "export default 'pwned'\n")
+
+    process.chdir(root)
+
+    const assets = resolveBundledAssets()
+
+    expect(assets.claudeCode.stop.startsWith(root)).toBe(false)
+    expect(assets.claudeCode.notification.startsWith(root)).toBe(false)
+    expect(assets.claudeCode.permissionRequest.startsWith(root)).toBe(false)
+    expect(assets.opencode.indexJs.startsWith(root)).toBe(false)
+    expect(assets.opencode.indexDts?.startsWith(root)).toBe(false)
+    expect(assets.opencode.packageJson?.startsWith(root)).toBe(false)
+    expect(assets.pi.extension.startsWith(root)).toBe(false)
   })
 })

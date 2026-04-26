@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 vi.mock("node:child_process", () => ({
   exec: vi.fn(),
-  execSync: vi.fn(),
   spawn: vi.fn(() => ({ unref: vi.fn() })),
+  spawnSync: vi.fn(() => ({ status: 0 })),
 }))
 
 import * as childProcess from "node:child_process"
@@ -115,13 +115,17 @@ describe("pane tab active detection logic", () => {
 })
 
 describe("markTabNotified", () => {
-  it("spawns shell poller with tab env", () => {
-    const execSyncMock = childProcess.execSync as unknown as { mock: { calls: unknown[][] } }
+  it("renames tab without shell interpolation and spawns poller with tab env", () => {
+    const spawnSyncMock = childProcess.spawnSync as unknown as { mock: { calls: unknown[][] } }
     const spawnMock = childProcess.spawn as unknown as { mock: { calls: unknown[][] } }
 
-    markTabNotified(12, "agent-notify")
+    markTabNotified(12, "$(touch /tmp/pwned)")
 
-    expect(execSyncMock).toHaveBeenCalled()
+    expect(spawnSyncMock).toHaveBeenCalledWith(
+      "zellij",
+      ["action", "rename-tab", "-t", "12", " ● $(touch /tmp/pwned)"],
+      { stdio: "ignore" },
+    )
     expect(spawnMock).toHaveBeenCalled()
     const [cmd, args, opts] = spawnMock.mock.calls[0] as any
     expect(cmd).toBe("sh")

@@ -1,4 +1,4 @@
-import { exec, execSync, spawn } from "node:child_process"
+import { exec, spawn, spawnSync } from "node:child_process"
 import { promisify } from "node:util"
 
 const execAsync = promisify(exec)
@@ -48,7 +48,10 @@ export async function getCurrentTabInfo(): Promise<{ tabId: number; tabName: str
  */
 export function markTabNotified(tabId: number, originalName: string): void {
   try {
-    execSync(`zellij action rename-tab -t ${tabId} ${JSON.stringify(`${TAB_NOTIFY_PREFIX}${originalName}`)}`)
+    const result = spawnSync("zellij", ["action", "rename-tab", "-t", String(tabId), `${TAB_NOTIFY_PREFIX}${originalName}`], {
+      stdio: "ignore",
+    })
+    if (result.error || result.status !== 0) return
   } catch {
     return
   }

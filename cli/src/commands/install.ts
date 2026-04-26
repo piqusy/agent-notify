@@ -1,5 +1,6 @@
 import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
-import { dirname, join, resolve } from "node:path"
+import { homedir } from "node:os"
+import { dirname, isAbsolute, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { defaultConfigPath } from "@agent-notify/core"
 
@@ -68,16 +69,15 @@ function ancestorDirs(start: string): string[] {
   return dirs
 }
 
-function candidateRoots(): string[] {
+function trustedCandidateRoots(): string[] {
   return unique([
-    ...ancestorDirs(process.cwd()),
     ...ancestorDirs(MODULE_DIR),
     ...ancestorDirs(dirname(process.execPath)),
   ])
 }
 
 function resolveAsset(relativePaths: string[]): string {
-  for (const root of candidateRoots()) {
+  for (const root of trustedCandidateRoots()) {
     for (const rel of relativePaths) {
       const candidate = join(root, rel)
       if (existsSync(candidate)) {
@@ -403,10 +403,19 @@ export function uninstallTargets(target: InstallTarget, homeDir: string): string
   return messages
 }
 
+function resolveHomeDir(): string {
+  const path = homedir()
+  if (!path || !isAbsolute(path)) {
+    throw new Error("Could not resolve a valid home directory")
+  }
+
+  return path
+}
+
 export async function cmdInstall(rawArgs: string[]): Promise<void> {
   const target = parseTarget(rawArgs)
   const messages = installTargets(target, {
-    homeDir: process.env.HOME ?? "",
+    homeDir: resolveHomeDir(),
     assets: resolveBundledAssets(),
     configPath: defaultConfigPath,
   })
@@ -419,7 +428,7 @@ export async function cmdInstall(rawArgs: string[]): Promise<void> {
 
 export async function cmdUninstall(rawArgs: string[]): Promise<void> {
   const target = parseTarget(rawArgs)
-  const messages = uninstallTargets(target, process.env.HOME ?? "")
+  const messages = uninstallTargets(target, resolveHomeDir())
 
   console.log(`Uninstalled ${target} integration${target === "all" ? "s" : ""}:`)
   for (const message of messages) {
