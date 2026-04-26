@@ -58,19 +58,25 @@ export function markTabNotified(tabId: number, originalName: string): void {
 
   // Poller: check every second, restore name when tab becomes active (5-min timeout)
   const script = `
-set -e
+set -eu
 MAX=300
 tries=0
 while [ "$tries" -lt "$MAX" ]; do
   tries=$((tries + 1))
   tabs="$(zellij action list-tabs --json 2>/dev/null || true)"
-  if [ -n "$tabs" ] && printf '%s' "$tabs" | jq -e --argjson tabId "$TAB_ID" '.[] | select(.tab_id == $tabId and .active == true)' >/dev/null 2>&1; then
-    current_name="$(printf '%s' "$tabs" | jq -r --argjson tabId "$TAB_ID" '.[] | select(.tab_id == $tabId) | .name' 2>/dev/null || true)"
-     restored_name="$(printf '%s' "$current_name" | sed 's/^ ● //')"
-    if [ "$restored_name" != "$current_name" ]; then
-      zellij action rename-tab -t "$TAB_ID" "$restored_name" >/dev/null 2>&1 || true
+  if [ -n "$tabs" ]; then
+    active="$(printf '%s' "$tabs" | jq -r --argjson tabId "$TAB_ID" '.[] | select(.tab_id == $tabId) | .active' 2>/dev/null || true)"
+    if [ "$active" = "true" ]; then
+      current_name="$(printf '%s' "$tabs" | jq -r --argjson tabId "$TAB_ID" '.[] | select(.tab_id == $tabId) | .name' 2>/dev/null || true)"
+      case "$current_name" in
+        " ● "*) restored_name=\${current_name#" ● "} ;;
+        *) restored_name="$current_name" ;;
+      esac
+      if [ "$restored_name" != "$current_name" ]; then
+        zellij action rename-tab -t "$TAB_ID" "$restored_name" >/dev/null 2>&1 || true
+      fi
+      exit 0
     fi
-    exit 0
   fi
   sleep 1
 done

@@ -23,6 +23,9 @@ class AgentNotify < Formula
     # AgentNotify.app is already signed in the release artifact.
     # Preserve that signature so macOS notification permissions stay tied to a stable app identity.
     libexec.install "opencode-agent-notify", "claude-code", "pi-coding-agent", "agent-notify-helper"
+
+    helper_binary = libexec/"agent-notify-helper/AgentNotify.app/Contents/MacOS/AgentNotify"
+    chmod 0755, helper_binary if helper_binary.exist?
   end
 
   test do

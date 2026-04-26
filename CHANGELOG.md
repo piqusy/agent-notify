@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.36] — 2026-04-26
+
+### Fixed
+- Restore the executable bit for the bundled `AgentNotify.app` helper during Homebrew install so macOS notifications work after upgrading to `0.1.35`
+- Make Zellij tab badge cleanup reliable again by simplifying the background poller that strips the `●` marker when the tab becomes active
+
 ## [0.1.35] — 2026-04-26
 
 ### Fixed
