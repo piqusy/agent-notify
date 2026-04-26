@@ -105,6 +105,12 @@
 ### Fixed
 - Make Homebrew exact-version docs generic and correct release workflow formula naming after `v0.1.18` tap update failure
 
+## [0.1.18] — 2026-04-19
+
+### Added
+- Add versioned Homebrew formulas so exact release installs like `brew install piqusy/tap/agent-notify@<version>` are published alongside the main formula
+- Add exact-version install docs to the release flow and README
+
 ## [0.1.17] — 2026-04-19
 
 ### Fixed
@@ -200,3 +206,15 @@
 
 ### Fixed
 - Focus detection: compare app names case-insensitively to fix mismatch between `TERM_PROGRAM_MAP` and osascript output
+
+## [0.1.1] — 2026-04-08
+
+### Fixed
+- Replace remaining shell-string process calls with argument-safe `spawnSync` usage across notification backends and CLI sound playback
+- Use PowerShell `-EncodedCommand` on Windows to avoid quoting issues in notification and sound commands
+- Sanitize cooldown file names and use `os.tmpdir()` instead of a hardcoded `/tmp` path
+
+## [0.1.0] — 2026-04-08
+
+### Fixed
+- Point release automation at `piqusy/homebrew-tap`, replacing the earlier separate tap repository setup
