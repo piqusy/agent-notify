@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.35] — 2026-04-26
+
+### Fixed
+- Claude Code hook installs now colocate copied hook scripts under `~/.claude/hooks/agent-notify/` instead of `~/.config/agent-notify/...`, with migration cleanup for legacy installs
+
 ## [0.1.34] — 2026-04-25
 
 ### Fixed
