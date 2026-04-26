@@ -10,6 +10,7 @@ AI agents can take minutes on complex tasks. Instead of watching the terminal, y
 
 - Native macOS notifications via a bundled helper app
 - Three event types: **done**, **question**, **permission request**
+- Compact context rows in the notification body for the current tab/project and Git branch
 - Configurable sound per event (with live preview in the setup wizard)
 - Bundled Agent Notify app icon on macOS
 - Quiet hours
@@ -78,6 +79,19 @@ agent-notify init              # re-run setup wizard
 agent-notify install all       # install all supported integrations
 agent-notify uninstall pi      # remove one integration
 ```
+
+## Notification layout
+
+Notifications use the title for the agent + event, and the body for compact context:
+
+```text
+Pi — Done
+▣  editor
+⎇  main
+```
+
+- `▣` shows the current Zellij tab name when available; otherwise it falls back to the project directory name
+- `⎇` shows the current Git branch, or `—` when no branch is available
 
 ## Claude Code
 

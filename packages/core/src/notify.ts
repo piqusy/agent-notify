@@ -37,6 +37,10 @@ function getGitBranch(cwd: string): string | null {
   }
 }
 
+function normalizeTabName(tabName: string): string {
+  return tabName.replace(/^\s*●\s*/, "").trim()
+}
+
 export async function notify(input: NotifyInput): Promise<NotifyResult> {
   const config: Config = await loadConfig()
 
@@ -64,10 +68,12 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
   const shouldProceed = input.force || await checkAndUpdateCooldown(file, config.cooldownSeconds)
   if (!shouldProceed) return { sent: false, reason: "cooldown" }
 
-  // 4. Git context
+  // 4. Git + tab context
   const cwd = input.cwd ?? process.cwd()
   const project = path.basename(cwd)
   const branch = getGitBranch(cwd)
+  const tabInfo = isZellijSession() ? await getCurrentTabInfo() : null
+  const tabName = tabInfo ? normalizeTabName(tabInfo.tabName) : project
 
   // 5. Build payload
   const TOOL_DISPLAY_NAMES: Record<string, string> = {
@@ -81,7 +87,10 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
     ?? input.tool.charAt(0).toUpperCase() + input.tool.slice(1)
   const stateLabel = input.state === "done" ? "Done" : "Question"
   const title = `${displayName} — ${stateLabel}`
-  const body = branch ? `${project} · ${branch}` : project
+  const body = [
+    `▣  ${tabName}`,
+    `⎇  ${branch ?? "—"}`,
+  ].join("\n")
 
   const sound = isQuietHour(config.quietHours)
     ? undefined
@@ -101,11 +110,8 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
   }
 
   // 6. Zellij tab icon — mark the background tab before macOS notification shows
-  if (isZellijSession()) {
-    const tabInfo = await getCurrentTabInfo()
-    if (tabInfo && !tabInfo.tabName.startsWith(" ●")) {
-      markTabNotified(tabInfo.tabId, tabInfo.tabName)
-    }
+  if (tabInfo && !tabInfo.tabName.startsWith(" ●")) {
+    markTabNotified(tabInfo.tabId, tabInfo.tabName)
   }
 
   // 7. Send

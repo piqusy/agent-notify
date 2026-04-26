@@ -5,6 +5,15 @@ function escapeDouble(s: string): string {
   return s.replace(/"/g, '\\"');
 }
 
+function toAppleScriptStringExpr(value: string): string {
+  return value
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .split("\n")
+    .map((part) => `"${escapeDouble(part)}"`)
+    .join(" & linefeed & ");
+}
+
 function helperArgs(payload: NotifyPayload): string[] {
   const args = ["--title", payload.title, "--body", payload.body];
 
@@ -30,8 +39,8 @@ export function sendMacOS(
       if (!options.helperAppPath) return;
       spawnSync("open", ["-n", options.helperAppPath, "--args", ...helperArgs(payload)], { stdio: "ignore" });
     } else {
-      const sound = payload.sound ? ` sound name "${escapeDouble(payload.sound)}"` : "";
-      const script = `display notification "${escapeDouble(payload.body)}" with title "${escapeDouble(payload.title)}"${sound}`;
+      const sound = payload.sound ? ` sound name ${toAppleScriptStringExpr(payload.sound)}` : "";
+      const script = `display notification ${toAppleScriptStringExpr(payload.body)} with title ${toAppleScriptStringExpr(payload.title)}${sound}`;
       spawnSync("osascript", ["-e", script], { stdio: "ignore" });
     }
   } catch {

@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+- Notification bodies now use separate compact context rows for tab/project (`▣`) and Git branch (`⎇`) instead of a single combined project/branch line
+
+### Fixed
+- macOS `osascript` fallback now preserves multiline notification bodies so compact context rows render correctly when the native helper is unavailable
+
 ## [0.1.39] — 2026-04-26
 
 ### Fixed
