@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.37] — 2026-04-26
+
+### Fixed
+- Opt GitHub Actions into the Node 24 JavaScript runtime so CI and release workflows stop emitting the Node 20 deprecation warning on hosted runners
+
 ## [0.1.36] — 2026-04-26
 
 ### Fixed
