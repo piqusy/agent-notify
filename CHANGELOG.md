@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.39] — 2026-04-26
+
+### Fixed
+- Make Zellij badge cleanup query live client pane-to-tab mapping with a scrubbed environment and explicit session targeting, so `●` clears reliably when returning to a badged tab
+
 ## [0.1.38] — 2026-04-26
 
 ### Fixed

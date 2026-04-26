@@ -56,24 +56,41 @@ export function markTabNotified(tabId: number, originalName: string): void {
     return
   }
 
-  // Poller: check every second, restore name when tab becomes active (5-min timeout)
+  // Poller: check every second, restore name when any attached client's current pane
+  // belongs to the badged tab (5-min timeout).
   const script = `
 set -eu
+run_zellij() {
+  if [ -n "$SESSION_NAME" ]; then
+    env -u ZELLIJ -u ZELLIJ_PANE_ID -u ZELLIJ_SESSION_NAME zellij --session "$SESSION_NAME" action "$@"
+  else
+    env -u ZELLIJ -u ZELLIJ_PANE_ID -u ZELLIJ_SESSION_NAME zellij action "$@"
+  fi
+}
 MAX=300
 tries=0
 while [ "$tries" -lt "$MAX" ]; do
   tries=$((tries + 1))
-  tabs="$(zellij action list-tabs --json 2>/dev/null || true)"
-  if [ -n "$tabs" ]; then
-    active="$(printf '%s' "$tabs" | jq -r --argjson tabId "$TAB_ID" '.[] | select(.tab_id == $tabId) | .active' 2>/dev/null || true)"
-    if [ "$active" = "true" ]; then
-      current_name="$(printf '%s' "$tabs" | jq -r --argjson tabId "$TAB_ID" '.[] | select(.tab_id == $tabId) | .name' 2>/dev/null || true)"
+  clients="$(run_zellij list-clients 2>/dev/null || true)"
+  panes="$(run_zellij list-panes --json 2>/dev/null || true)"
+  if [ -n "$clients" ] && [ -n "$panes" ]; then
+    pane_ids="$(printf '%s\n' "$clients" | awk 'NR > 1 { print $2 }' | sed -E 's/^(terminal_|plugin_)//')"
+    viewed_tab="false"
+    for pane_id in $pane_ids; do
+      client_tab_id="$(printf '%s' "$panes" | jq -r --argjson paneId "$pane_id" '.[] | select(.id == $paneId) | .tab_id' 2>/dev/null || true)"
+      if [ "$client_tab_id" = "$TAB_ID" ]; then
+        viewed_tab="true"
+        break
+      fi
+    done
+    current_name="$(printf '%s' "$panes" | jq -r --argjson tabId "$TAB_ID" '.[] | select(.tab_id == $tabId) | .tab_name' 2>/dev/null | head -n 1 || true)"
+    if [ "$viewed_tab" = "true" ]; then
       case "$current_name" in
         " ● "*) restored_name=\${current_name#" ● "} ;;
         *) restored_name="$current_name" ;;
       esac
-      if [ "$restored_name" != "$current_name" ]; then
-        zellij action rename-tab -t "$TAB_ID" "$restored_name" >/dev/null 2>&1 || true
+      if [ -n "$current_name" ] && [ "$restored_name" != "$current_name" ]; then
+        run_zellij rename-tab -t "$TAB_ID" "$restored_name" >/dev/null 2>&1 || true
       fi
       exit 0
     fi
@@ -87,6 +104,7 @@ done
     env: {
       ...process.env,
       TAB_ID: String(tabId),
+      SESSION_NAME: process.env.ZELLIJ_SESSION_NAME ?? "",
     },
   })
   child.unref()
