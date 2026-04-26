@@ -87,7 +87,7 @@ Install with:
 agent-notify install claude-code
 ```
 
-Hooks are configured in `~/.claude/settings.json`:
+Hooks are configured in `~/.claude/settings.json`, and the hook scripts are copied into `~/.claude/hooks/agent-notify/`:
 
 | Hook | Event |
 |------|-------|

@@ -190,15 +190,24 @@ function isClaudeAgentNotifyCommand(command: unknown, scriptName: string): boole
   return command.includes("agent-notify") && (
     command.endsWith(`/claude-code/hooks/${scriptName}`)
     || command.endsWith(`/hooks/${scriptName}`)
+    || command.endsWith(`/hooks/agent-notify/${scriptName}`)
     || command.includes("agent-notify.sh")
   )
 }
 
+function claudeHooksDir(homeDir: string): string {
+  return join(homeDir, ".claude", "hooks", "agent-notify")
+}
+
+function legacyClaudeHooksRoot(homeDir: string): string {
+  return join(homeDir, ".config", "agent-notify", "claude-code")
+}
+
 function installClaudeCode(env: InstallEnvironment): string[] {
-  const claudeHooksDir = join(env.homeDir, ".config", "agent-notify", "claude-code", "hooks")
-  const stopTarget = join(claudeHooksDir, "stop.sh")
-  const notificationTarget = join(claudeHooksDir, "notification.sh")
-  const permissionTarget = join(claudeHooksDir, "permission_request.sh")
+  const hooksDir = claudeHooksDir(env.homeDir)
+  const stopTarget = join(hooksDir, "stop.sh")
+  const notificationTarget = join(hooksDir, "notification.sh")
+  const permissionTarget = join(hooksDir, "permission_request.sh")
 
   copyFile(env.assets.claudeCode.stop, stopTarget, 0o755)
   copyFile(env.assets.claudeCode.notification, notificationTarget, 0o755)
@@ -251,10 +260,11 @@ function installClaudeCode(env: InstallEnvironment): string[] {
   }
 
   writeJson(settingsPath, settings)
+  rmSync(legacyClaudeHooksRoot(env.homeDir), { recursive: true, force: true })
 
   const messages = [
     `Claude Code hooks installed in ${settingsPath}`,
-    `Claude Code hook scripts copied to ${claudeHooksDir}`,
+    `Claude Code hook scripts copied to ${hooksDir}`,
   ]
 
   if (!hasCommand("jq")) {
@@ -270,7 +280,8 @@ function pruneEmptyHookGroups(items: ClaudeCodeHookMatcher[]): ClaudeCodeHookMat
 
 function uninstallClaudeCode(homeDir: string): string[] {
   const settingsPath = join(homeDir, ".claude", "settings.json")
-  const hooksDir = join(homeDir, ".config", "agent-notify", "claude-code")
+  const hooksDir = claudeHooksDir(homeDir)
+  const legacyHooksDir = legacyClaudeHooksRoot(homeDir)
   const messages: string[] = []
 
   if (existsSync(settingsPath)) {
@@ -305,6 +316,7 @@ function uninstallClaudeCode(homeDir: string): string[] {
   }
 
   rmSync(hooksDir, { recursive: true, force: true })
+  rmSync(legacyHooksDir, { recursive: true, force: true })
   messages.push(`Claude hook scripts removed from ${hooksDir}`)
 
   return messages

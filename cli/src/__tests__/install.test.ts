@@ -55,19 +55,45 @@ describe("integration installers", () => {
     expect(messages.some((message) => message.includes("OpenCode plugin installed"))).toBe(true)
     expect(messages.some((message) => message.includes("Pi extension installed"))).toBe(true)
 
-    expect(existsSync(join(root, ".config", "agent-notify", "claude-code", "hooks", "stop.sh"))).toBe(true)
+    expect(existsSync(join(root, ".claude", "hooks", "agent-notify", "stop.sh"))).toBe(true)
     expect(existsSync(join(root, ".config", "opencode", "plugins", "opencode-agent-notify", "index.js"))).toBe(true)
     expect(existsSync(join(root, ".pi", "agent", "extensions", "agent-notify.ts"))).toBe(true)
 
     const claudeSettings = JSON.parse(readFileSync(join(root, ".claude", "settings.json"), "utf8")) as {
       hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>
     }
-    expect(claudeSettings.hooks.Stop[0].hooks[0].command).toContain(".config/agent-notify/claude-code/hooks/stop.sh")
+    expect(claudeSettings.hooks.Stop[0].hooks[0].command).toContain(".claude/hooks/agent-notify/stop.sh")
 
     const opencodeConfig = JSON.parse(readFileSync(join(root, ".config", "opencode", "opencode.json"), "utf8")) as {
       plugin: string[]
     }
     expect(opencodeConfig.plugin).toContain(join(root, ".config", "opencode", "plugins", "opencode-agent-notify", "index.js"))
+  })
+
+  it("migrates Claude Code hooks out of agent-notify config dir", () => {
+    const root = makeTempDir()
+    dirs.push(root)
+    const assets = createAssets(root)
+    const configPath = join(root, ".config", "agent-notify", "config.json")
+    const legacyDir = join(root, ".config", "agent-notify", "claude-code", "hooks")
+    write(join(legacyDir, "stop.sh"), "#!/usr/bin/env bash\n")
+    write(join(legacyDir, "notification.sh"), "#!/usr/bin/env bash\n")
+    write(join(legacyDir, "permission_request.sh"), "#!/usr/bin/env bash\n")
+    write(join(root, ".claude", "settings.json"), JSON.stringify({
+      hooks: {
+        Stop: [{ matcher: "", hooks: [{ type: "command", command: join(legacyDir, "stop.sh") }] }],
+      },
+    }, null, 2))
+
+    installTargets("claude-code", { homeDir: root, assets, configPath })
+
+    expect(existsSync(join(root, ".claude", "hooks", "agent-notify", "stop.sh"))).toBe(true)
+    expect(existsSync(join(root, ".config", "agent-notify", "claude-code"))).toBe(false)
+
+    const claudeSettings = JSON.parse(readFileSync(join(root, ".claude", "settings.json"), "utf8")) as {
+      hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>
+    }
+    expect(claudeSettings.hooks.Stop[0].hooks[0].command).toContain(".claude/hooks/agent-notify/stop.sh")
   })
 
   it("uninstalls all integrations from a temp home", () => {

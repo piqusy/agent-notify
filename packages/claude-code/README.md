@@ -10,6 +10,8 @@ Recommended:
 agent-notify install claude-code
 ```
 
+This installs the hook scripts into `~/.claude/hooks/agent-notify/` and updates `~/.claude/settings.json`.
+
 Manual wiring is also possible. Add these hooks to your Claude Code settings (`.claude/settings.json`):
 
 ```json
