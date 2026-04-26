@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.38] — 2026-04-26
+
+### Fixed
+- Update pinned GitHub Actions to Node 24-based releases so CI and release workflows no longer rely on deprecated Node 20 action runtimes
+
 ## [0.1.37] — 2026-04-26
 
 ### Fixed
