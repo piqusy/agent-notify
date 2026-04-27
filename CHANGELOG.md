@@ -1,11 +1,15 @@
 # Changelog
 
-## [Unreleased]
+## [0.1.40] — 2026-04-26
+
+### Added
+- Optional configurable Zellij pane background indicators with exact origin-pane tracking, so the triggering pane can stay marked until it is focused again
 
 ### Changed
 - Notification bodies now use separate compact context rows for tab/project (`▣`) and Git branch (`⎇`) instead of a single combined project/branch line
 
 ### Fixed
+- Zellij notification state now tracks pending panes per tab, so tab badges only clear after all pending panes in that tab are resolved and pane indicators clear only when the exact origin pane is focused
 - macOS `osascript` fallback now preserves multiline notification bodies so compact context rows render correctly when the native helper is unavailable
 
 ## [0.1.39] — 2026-04-26

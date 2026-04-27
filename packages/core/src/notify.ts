@@ -37,7 +37,11 @@ function getGitBranch(cwd: string): string | null {
   }
 }
 
-function normalizeTabName(tabName: string): string {
+function normalizeTabName(tabName: string, tabPrefix: string): string {
+  if (tabName.startsWith(tabPrefix)) {
+    return tabName.slice(tabPrefix.length).trim()
+  }
+
   return tabName.replace(/^\s*●\s*/, "").trim()
 }
 
@@ -73,7 +77,8 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
   const project = path.basename(cwd)
   const branch = getGitBranch(cwd)
   const tabInfo = isZellijSession() ? await getCurrentTabInfo() : null
-  const tabName = tabInfo ? normalizeTabName(tabInfo.tabName) : project
+  const tabPrefix = config.zellij.tabIndicator.prefix
+  const tabName = tabInfo ? normalizeTabName(tabInfo.tabName, tabPrefix) : project
 
   // 5. Build payload
   const TOOL_DISPLAY_NAMES: Record<string, string> = {
@@ -109,9 +114,14 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
     ...(sound ? { sound } : {}),
   }
 
-  // 6. Zellij tab icon — mark the background tab before macOS notification shows
-  if (tabInfo && !tabInfo.tabName.startsWith(" ●")) {
-    markTabNotified(tabInfo.tabId, tabInfo.tabName)
+  // 6. Zellij tab/pane indicators — mark the background tab before macOS notification shows
+  if (tabInfo) {
+    markTabNotified(tabInfo.tabId, tabInfo.tabName, {
+      sessionName: process.env.ZELLIJ_SESSION_NAME ?? null,
+      originPaneId: Number.parseInt(process.env.ZELLIJ_PANE_ID ?? "", 10),
+      tabIndicator: config.zellij.tabIndicator,
+      paneIndicator: config.zellij.paneIndicator,
+    })
   }
 
   // 7. Send

@@ -5,15 +5,20 @@ vi.mock("child_process");
 import { sendNotification } from "../platform/index.js";
 import { sendMacOS } from "../platform/macos.js";
 import { sendLinux } from "../platform/linux.js";
+import type { Config } from "../types.js";
 import * as cp from "child_process";
 
-const mockConfig = {
+const mockConfig: Config = {
   backend: null,
   terminalApp: null,
   cooldownSeconds: 3,
   quietHours: { start: 22, end: 8 },
   sounds: { done: "Morse", question: "Submarine", permission: null },
   events: { done: true, question: true, permission: true },
+  zellij: {
+    tabIndicator: { enabled: true, prefix: " ● " },
+    paneIndicator: { enabled: false, mode: "background", bg: "#3c3836", fg: null, clearOn: "origin-pane-focus" },
+  },
 };
 
 describe("sendNotification", () => {

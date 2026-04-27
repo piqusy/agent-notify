@@ -2,7 +2,10 @@ import path from "node:path"
 import { describe, it, expect, vi, afterEach } from "vitest"
 
 vi.mock("node:child_process", () => ({
+  exec: vi.fn(),
   execSync: vi.fn(() => "main\n"),
+  spawn: vi.fn(),
+  spawnSync: vi.fn(),
 }))
 
 vi.mock("../config.js", () => ({
@@ -13,6 +16,10 @@ vi.mock("../config.js", () => ({
     quietHours: null,
     sounds: { done: null, question: null, permission: null },
     backend: null,
+    zellij: {
+      tabIndicator: { enabled: true, prefix: " ● " },
+      paneIndicator: { enabled: false, mode: "background", bg: "#3c3836", fg: null, clearOn: "origin-pane-focus" },
+    },
   })),
 }))
 

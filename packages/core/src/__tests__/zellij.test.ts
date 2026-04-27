@@ -115,7 +115,15 @@ describe("pane tab active detection logic", () => {
 })
 
 describe("markTabNotified", () => {
-  it("renames tab without shell interpolation and spawns poller with tab env", () => {
+  afterEach(() => {
+    delete process.env.ZELLIJ_PANE_ID
+    delete process.env.ZELLIJ_SESSION_NAME
+  })
+
+  it("renames tab without shell interpolation and spawns a session poller", () => {
+    process.env.ZELLIJ_PANE_ID = "12"
+    process.env.ZELLIJ_SESSION_NAME = "test-session"
+
     const spawnSyncMock = childProcess.spawnSync as unknown as { mock: { calls: unknown[][] } }
     const spawnMock = childProcess.spawn as unknown as { mock: { calls: unknown[][] } }
 
@@ -130,15 +138,17 @@ describe("markTabNotified", () => {
     const [cmd, args, opts] = spawnMock.mock.calls[0] as any
     expect(cmd).toBe("sh")
     expect(args).toEqual(["-c", expect.stringContaining("run_zellij()")])
-    expect(opts.env.TAB_ID).toBe("12")
-    expect(opts.env.SESSION_NAME).toBe(process.env.ZELLIJ_SESSION_NAME ?? "")
+    expect(opts.env.TAB_PREFIX).toBe(" ● ")
+    expect(opts.env.SESSION_NAME).toBe("test-session")
+    expect(opts.env.STATE_DIR).toContain("agent-notify-zellij-state-test-session")
+    expect(opts.env.PID_FILE).toContain("poller.pid")
     expect(args[1]).toContain("env -u ZELLIJ -u ZELLIJ_PANE_ID -u ZELLIJ_SESSION_NAME zellij")
-    expect(args[1]).toContain("run_zellij list-clients")
+    expect(args[1]).toContain("run_zellij list-tabs --json")
     expect(args[1]).toContain("run_zellij list-panes --json")
-    expect(args[1]).toContain("pane_ids=")
-    expect(args[1]).toContain("client_tab_id=")
-    expect(args[1]).toContain("viewed_tab=\"true\"")
-    expect(args[1]).toContain("current_name")
-    expect(args[1]).toContain("restored_name")
+    expect(args[1]).toContain("run_zellij list-clients")
+    expect(args[1]).toContain("set-pane-color --pane-id")
+    expect(args[1]).toContain('"$STATE_DIR"/tab-*')
+    expect(args[1]).toContain("paneIndicatorApplied")
+    expect(args[1]).toContain("TAB_PREFIX")
   })
 })

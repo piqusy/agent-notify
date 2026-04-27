@@ -19,6 +19,24 @@ export interface EventFilter {
   permission: boolean
 }
 
+export interface ZellijTabIndicatorConfig {
+  enabled: boolean
+  prefix: string
+}
+
+export interface ZellijPaneIndicatorConfig {
+  enabled: boolean
+  mode: "background"
+  bg: string | null
+  fg: string | null
+  clearOn: "origin-pane-focus"
+}
+
+export interface ZellijConfig {
+  tabIndicator: ZellijTabIndicatorConfig
+  paneIndicator: ZellijPaneIndicatorConfig
+}
+
 export interface Config {
   cooldownSeconds: number
   quietHours:      QuietHours | null   // null = quiet hours disabled entirely
@@ -26,6 +44,7 @@ export interface Config {
   events:          EventFilter
   terminalApp:     string | null   // null = auto-detect via TERM_PROGRAM
   backend:         NotifyBackend | null   // null = auto-detect
+  zellij:          ZellijConfig
 }
 
 export interface NotifyPayload {

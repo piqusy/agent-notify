@@ -176,6 +176,7 @@ export async function cmdInit(): Promise<void> {
     },
     terminalApp,
     backend,
+    zellij: defaultConfig.zellij,
   }
 
   // --- Review ---

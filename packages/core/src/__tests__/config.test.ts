@@ -18,6 +18,27 @@ describe("loadConfig", () => {
     expect(cfg.quietHours).toEqual(defaultConfig.quietHours)
   })
 
+  it("deep-merges nested config sections", async () => {
+    const tmp = join(tmpdir(), "agent-notify-nested-config.json")
+    await writeFile(tmp, JSON.stringify({
+      sounds: { done: "Ping" },
+      zellij: {
+        paneIndicator: {
+          enabled: true,
+          bg: "#282828",
+        },
+      },
+    }))
+    const cfg = await loadConfig(tmp)
+
+    expect(cfg.sounds.done).toBe("Ping")
+    expect(cfg.sounds.question).toBe(defaultConfig.sounds.question)
+    expect(cfg.zellij.tabIndicator).toEqual(defaultConfig.zellij.tabIndicator)
+    expect(cfg.zellij.paneIndicator.enabled).toBe(true)
+    expect(cfg.zellij.paneIndicator.bg).toBe("#282828")
+    expect(cfg.zellij.paneIndicator.clearOn).toBe(defaultConfig.zellij.paneIndicator.clearOn)
+  })
+
   it("returns default config when file contains invalid JSON", async () => {
     const tmp = join(tmpdir(), "agent-notify-bad-config.json")
     await writeFile(tmp, "not json {{{")
