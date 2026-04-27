@@ -57,22 +57,15 @@ PY
 }
 
 clone_tap_repo() {
-  if [[ -z "${HOMEBREW_TAP_DEPLOY_KEY:-}" ]]; then
-    echo "::warning::Skipping Homebrew tap update: HOMEBREW_TAP_DEPLOY_KEY secret is not configured."
-    exit 0
-  fi
+  : "${HOMEBREW_TAP_DEPLOY_KEY:?HOMEBREW_TAP_DEPLOY_KEY secret is required}"
+  : "${HOMEBREW_TAP_KNOWN_HOSTS:?HOMEBREW_TAP_KNOWN_HOSTS secret is required}"
 
   umask 077
   mkdir -p ~/.ssh
   printf '%s\n' "$HOMEBREW_TAP_DEPLOY_KEY" | tr -d '\r' > ~/.ssh/homebrew_tap_deploy_key
   chmod 600 ~/.ssh/homebrew_tap_deploy_key
 
-  if [[ -n "${HOMEBREW_TAP_KNOWN_HOSTS:-}" ]]; then
-    printf '%s\n' "$HOMEBREW_TAP_KNOWN_HOSTS" > ~/.ssh/known_hosts
-  else
-    echo "::warning::HOMEBREW_TAP_KNOWN_HOSTS is not configured; falling back to ssh-keyscan github.com."
-    ssh-keyscan github.com > ~/.ssh/known_hosts
-  fi
+  printf '%s\n' "$HOMEBREW_TAP_KNOWN_HOSTS" > ~/.ssh/known_hosts
   chmod 644 ~/.ssh/known_hosts
 
   cat > ~/.ssh/config <<'EOF'
