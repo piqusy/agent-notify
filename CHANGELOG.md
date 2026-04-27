@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.1.42] — 2026-04-26
+
+### Added
+- `agent-notify config edit` as an explicit alias for reopening the interactive setup wizard to update an existing config
+
+### Changed
+- `agent-notify init` now prepopulates all prompts from the existing config instead of resetting most fields back to built-in defaults when rerun
+
+### Fixed
+- Re-running the setup wizard now preserves existing backend, terminal app, quiet hours, sounds, events, cooldown, and Zellij settings unless you actively change them
+
 ## [0.1.41] — 2026-04-26
 
 ### Changed
