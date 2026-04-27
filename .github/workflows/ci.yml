@@ -38,3 +38,6 @@ jobs:
 
       - name: Test
         run: bun run test
+
+      - name: Check release files
+        run: bun run check:release

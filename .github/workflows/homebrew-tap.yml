@@ -1,0 +1,87 @@
+name: Homebrew Tap
+run-name: homebrew-tap-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.release.tag_name }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish to Homebrew tap
+        required: true
+        type: string
+  release:
+    types:
+      - published
+
+permissions:
+  contents: read
+
+env:
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.release.tag_name }}
+
+concurrency:
+  group: homebrew-tap-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Validate release tag
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Release tag must match vMAJOR.MINOR.PATCH"
+            exit 1
+          fi
+          git fetch --tags --force origin
+          if ! git rev-parse -q --verify "refs/tags/$RELEASE_TAG" >/dev/null; then
+            echo "::error::Tag $RELEASE_TAG does not exist on origin"
+            exit 1
+          fi
+          git checkout --detach "refs/tags/$RELEASE_TAG"
+
+      - name: Check release files
+        run: node scripts/check-release.mjs
+        env:
+          RELEASE_TAG: ${{ env.RELEASE_TAG }}
+
+      - name: Ensure GitHub Release exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY"
+
+      - name: Download published release tarballs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gh release download "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --dir dist \
+            --pattern 'agent-notify-darwin-arm64.tar.gz' \
+            --pattern 'agent-notify-darwin-x64.tar.gz'
+
+      - name: Compute SHAs from release tarballs
+        id: shas
+        run: |
+          echo "arm64=$(sha256sum dist/agent-notify-darwin-arm64.tar.gz | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "x64=$(sha256sum dist/agent-notify-darwin-x64.tar.gz | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+
+      - name: Update Homebrew tap
+        env:
+          VERSION: ${{ env.RELEASE_TAG }}
+          ARM64_SHA: ${{ steps.shas.outputs.arm64 }}
+          X64_SHA: ${{ steps.shas.outputs.x64 }}
+          HOMEBREW_TAP_DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+          HOMEBREW_TAP_KNOWN_HOSTS: ${{ secrets.HOMEBREW_TAP_KNOWN_HOSTS }}
+        run: bash ./scripts/update-homebrew-tap.sh
