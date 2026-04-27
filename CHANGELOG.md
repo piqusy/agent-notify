@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.43] — 2026-04-27
+
+### Changed
+- Release automation now separates GitHub Release publishing from Homebrew tap publishing, with manual tag-based reruns for both workflows
+
+### Fixed
+- Release and Homebrew reruns now work against existing tags by checking the target tag into a separate directory while keeping helper scripts from the current workflow branch
+- Homebrew tap publishing now requires pinned `release` environment secrets and no longer falls back to runtime `ssh-keyscan` host trust
+- CI now validates release files on every push and pull request to catch version/changelog drift earlier
+
 ## [0.1.42] — 2026-04-26
 
 ### Added
