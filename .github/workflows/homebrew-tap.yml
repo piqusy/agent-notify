@@ -1,5 +1,5 @@
 name: Homebrew Tap
-run-name: homebrew-tap-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.release.tag_name }}
+run-name: homebrew-tap-${{ inputs.tag }}
 
 on:
   workflow_dispatch:
@@ -8,18 +8,15 @@ on:
         description: Release tag to publish to Homebrew tap
         required: true
         type: string
-  release:
-    types:
-      - published
 
 permissions:
   contents: read
 
 env:
-  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.release.tag_name }}
+  RELEASE_TAG: ${{ inputs.tag }}
 
 concurrency:
-  group: homebrew-tap-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.release.tag_name }}
+  group: homebrew-tap-${{ inputs.tag }}
   cancel-in-progress: false
 
 jobs:

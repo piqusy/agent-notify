@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.44] — 2026-04-27
+
+### Fixed
+- The Release workflow now explicitly dispatches the separate Homebrew Tap workflow after publishing the GitHub Release, so automatic tap updates no longer depend on `release.published` events triggered by `GITHUB_TOKEN`
+- Homebrew publishing remains a separate workflow, but now runs reliably for new releases while still supporting manual tag-based reruns
+
 ## [0.1.43] — 2026-04-27
 
 ### Changed

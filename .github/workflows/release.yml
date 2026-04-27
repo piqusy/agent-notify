@@ -138,6 +138,7 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: write
+      actions: write
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -228,3 +229,8 @@ jobs:
               --title "$RELEASE_TAG" \
               --notes-file /tmp/release-notes.md
           fi
+
+      - name: Dispatch Homebrew Tap workflow
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run homebrew-tap.yml -f tag="$RELEASE_TAG"
