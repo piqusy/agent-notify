@@ -5,6 +5,7 @@ import {
   BUILTIN_SOUNDS,
   defaultConfig,
   defaultConfigPath,
+  loadConfig,
   notify,
   TERM_PROGRAM_MAP,
   resolveTerminalApp,
@@ -36,6 +37,35 @@ const BACKEND_CHOICES: Array<{ name: string; value: NotifyBackend | null }> = [
   { name: "PowerShell / BurntToast (Windows)", value: "powershell" },
 ]
 
+const ZELLIJ_MODE_CHOICES = [
+  { name: "Tab indicator only (recommended)", value: "tab-only" },
+  { name: "Tab indicator + pane tint", value: "tab-and-pane" },
+  { name: "Disable Zellij indicators", value: "disabled" },
+] as const
+
+const ZELLIJ_PANE_BG_CHOICES = [
+  { name: "Subtle neutral (#32302f)", value: "#32302f" },
+  { name: "Stronger neutral (#3c3836)", value: "#3c3836" },
+  { name: "Warm brown (#3a332b)", value: "#3a332b" },
+  { name: "Custom hex", value: "__custom__" },
+] as const
+
+function isHexColor(value: string): boolean {
+  return /^#[0-9a-fA-F]{6}$/.test(value)
+}
+
+function zellijModeFromConfig(config: Config): (typeof ZELLIJ_MODE_CHOICES)[number]["value"] {
+  if (!config.zellij.tabIndicator.enabled) return "disabled"
+  if (config.zellij.paneIndicator.enabled) return "tab-and-pane"
+  return "tab-only"
+}
+
+function shouldAskForZellijConfig(config: Config): boolean {
+  if (process.env.ZELLIJ !== undefined) return true
+
+  return JSON.stringify(config.zellij) !== JSON.stringify(defaultConfig.zellij)
+}
+
 function detectMacOSVersion(): string | null {
   try {
     return execSync("sw_vers -productVersion", { encoding: "utf8" }).trim()
@@ -45,6 +75,8 @@ function detectMacOSVersion(): string | null {
 }
 
 export async function cmdInit(): Promise<void> {
+  const existingConfig = await loadConfig(defaultConfigPath)
+
   console.log("agent-notify setup wizard")
   console.log("=========================\n")
 
@@ -164,6 +196,72 @@ export async function cmdInit(): Promise<void> {
     },
   }))
 
+  // --- Zellij indicators ---
+  let zellij = existingConfig.zellij
+  if (shouldAskForZellijConfig(existingConfig)) {
+    const zellijMode = await ask(selectWithPreview<(typeof ZELLIJ_MODE_CHOICES)[number]["value"]>({
+      message: "Zellij visual indicators for background notifications",
+      choices: [...ZELLIJ_MODE_CHOICES],
+      default: zellijModeFromConfig(existingConfig),
+    }))
+
+    if (zellijMode === "disabled") {
+      zellij = {
+        tabIndicator: {
+          ...existingConfig.zellij.tabIndicator,
+          enabled: false,
+        },
+        paneIndicator: {
+          ...existingConfig.zellij.paneIndicator,
+          enabled: false,
+        },
+      }
+    } else if (zellijMode === "tab-only") {
+      zellij = {
+        tabIndicator: {
+          ...existingConfig.zellij.tabIndicator,
+          enabled: true,
+        },
+        paneIndicator: {
+          ...existingConfig.zellij.paneIndicator,
+          enabled: false,
+        },
+      }
+    } else {
+      const defaultPaneBg = existingConfig.zellij.paneIndicator.bg ?? defaultConfig.zellij.paneIndicator.bg ?? "#32302f"
+      const paneBgChoice = await ask(selectWithPreview<string>({
+        message: "Pane tint color",
+        choices: ZELLIJ_PANE_BG_CHOICES.map((choice) => ({
+          name: choice.name,
+          value: choice.value,
+        })),
+        default: ZELLIJ_PANE_BG_CHOICES.some((choice) => choice.value === defaultPaneBg)
+          ? defaultPaneBg
+          : "__custom__",
+      }))
+
+      const paneBg = paneBgChoice === "__custom__"
+        ? await ask(input({
+            message: "Pane background hex color",
+            default: defaultPaneBg,
+            validate: (value) => isHexColor(value.trim()) || "Enter a hex color like #32302f",
+          }))
+        : paneBgChoice
+
+      zellij = {
+        tabIndicator: {
+          ...existingConfig.zellij.tabIndicator,
+          enabled: true,
+        },
+        paneIndicator: {
+          ...existingConfig.zellij.paneIndicator,
+          enabled: true,
+          bg: paneBg.trim(),
+        },
+      }
+    }
+  }
+
   // --- Build config ---
   const config: Config = {
     cooldownSeconds: parseInt(cooldownStr, 10),
@@ -176,7 +274,7 @@ export async function cmdInit(): Promise<void> {
     },
     terminalApp,
     backend,
-    zellij: defaultConfig.zellij,
+    zellij,
   }
 
   // --- Review ---

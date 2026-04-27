@@ -10,7 +10,7 @@ vi.mock("../config.js", () => ({
     backend: null,
     zellij: {
       tabIndicator: { enabled: true, prefix: " ● " },
-      paneIndicator: { enabled: false, mode: "background", bg: "#3c3836", fg: null, clearOn: "origin-pane-focus" },
+      paneIndicator: { enabled: false, mode: "background", bg: "#3c3836", clearOn: "origin-pane-focus" },
     },
   })),
 }))

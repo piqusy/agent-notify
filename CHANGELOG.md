@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.41] — 2026-04-26
+
+### Changed
+- `agent-notify init` now exposes a compact Zellij indicator section with modes for tab-only, tab + pane tint, or disabled, plus pane tint color selection when enabled
+
+### Fixed
+- Zellij session pollers no longer time out after five minutes, so tab badges and pane indicators continue clearing correctly even if you return to the pane much later
+- Pane indicator config is now bg-only, removing the unused foreground override from the public config surface
+
 ## [0.1.40] — 2026-04-26
 
 ### Added

@@ -19,7 +19,6 @@ export const defaultConfig: Config = {
       enabled: false,
       mode: "background",
       bg: "#3c3836",
-      fg: null,
       clearOn: "origin-pane-focus",
     },
   },

@@ -28,7 +28,6 @@ export interface ZellijPaneIndicatorConfig {
   enabled: boolean
   mode: "background"
   bg: string | null
-  fg: string | null
   clearOn: "origin-pane-focus"
 }
 

@@ -83,12 +83,9 @@ function applyPaneIndicator(
   paneIndicator: Config["zellij"]["paneIndicator"] | undefined,
 ): boolean {
   if (!paneIndicator?.enabled) return false
-  if (!paneIndicator.fg && !paneIndicator.bg) return false
+  if (!paneIndicator.bg) return false
 
-  const args = ["set-pane-color", "--pane-id", String(paneId)]
-
-  if (paneIndicator.fg) args.push("--fg", paneIndicator.fg)
-  if (paneIndicator.bg) args.push("--bg", paneIndicator.bg)
+  const args = ["set-pane-color", "--pane-id", String(paneId), "--bg", paneIndicator.bg]
 
   try {
     const result = spawnSync("zellij", [
@@ -171,10 +168,7 @@ cleanup() {
   rmdir "$STATE_DIR" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
-MAX=300
-tries=0
-while [ "$tries" -lt "$MAX" ]; do
-  tries=$((tries + 1))
+while :; do
   tabs_json="$(run_zellij list-tabs --json 2>/dev/null || true)"
   panes_json="$(run_zellij list-panes --json 2>/dev/null || true)"
   clients="$(run_zellij list-clients 2>/dev/null || true)"
