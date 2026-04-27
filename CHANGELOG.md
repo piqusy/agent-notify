@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.45] — 2026-04-27
+
+### Fixed
+- Pi no longer sends false-positive notifications for aborted or errored runs, and it now only classifies the final assistant message instead of falling back to older assistant text
+
+### Added
+- Pi can now log raw `agent_end` payloads to `AGENT_NOTIFY_PI_DEBUG_LOG` for field verification while debugging notification classification issues
+
 ## [0.1.44] — 2026-04-27
 
 ### Fixed

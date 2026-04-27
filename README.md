@@ -133,6 +133,7 @@ It emits:
 
 - **done** when Pi finishes a turn
 - **question** when the last assistant line ends with `?`
+- nothing for aborted/error turns or assistant turns with no visible text, avoiding false-positive completion notifications
 
 Pi does not have a built-in permission-request event, so there is no Pi `permission` notification.
 

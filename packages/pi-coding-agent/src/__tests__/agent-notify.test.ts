@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest"
 import { classifyPiAgentState } from "../agent-notify.js"
 
 describe("Pi agent-notify integration", () => {
-  it("defaults to done when there is no assistant message", () => {
-    expect(classifyPiAgentState([])).toBe("done")
+  it("does not notify when there is no assistant message", () => {
+    expect(classifyPiAgentState([])).toBeNull()
   })
 
   it("detects a trailing question in the last assistant line", () => {
@@ -28,5 +28,43 @@ describe("Pi agent-notify integration", () => {
         ],
       },
     ])).toBe("done")
+  })
+
+  it("does not notify for aborted runs", () => {
+    expect(classifyPiAgentState([
+      {
+        role: "assistant",
+        content: [{ type: "text", text: "" }],
+        stopReason: "aborted",
+        errorMessage: "Aborted by user",
+      },
+    ])).toBeNull()
+  })
+
+  it("does not notify for errored runs", () => {
+    expect(classifyPiAgentState([
+      {
+        role: "assistant",
+        content: [{ type: "text", text: "" }],
+        stopReason: "error",
+      },
+    ])).toBeNull()
+  })
+
+  it("does not fall back to an earlier assistant message when the last one has no text", () => {
+    expect(classifyPiAgentState([
+      {
+        role: "assistant",
+        content: [{ type: "text", text: "I inspected the codebase." }],
+      },
+      {
+        role: "toolResult",
+        content: [{ type: "text", text: "ok" }],
+      },
+      {
+        role: "assistant",
+        content: [],
+      },
+    ])).toBeNull()
   })
 })
