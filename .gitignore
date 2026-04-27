@@ -1,6 +1,5 @@
 node_modules/
 dist/
-docs/
 cli/.claude/
 *.tsbuildinfo
 .DS_Store
