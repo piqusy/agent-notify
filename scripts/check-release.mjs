@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs"
+import { join, resolve } from "node:path"
+
+const repoRoot = resolve(process.env.REPO_ROOT?.trim() || process.argv[2] || process.cwd())
 
 const packageFiles = [
   "cli/package.json",
@@ -13,12 +16,16 @@ function fail(message) {
   process.exit(1)
 }
 
+function readText(path) {
+  return readFileSync(join(repoRoot, path), "utf8")
+}
+
 function readJson(path) {
-  return JSON.parse(readFileSync(path, "utf8"))
+  return JSON.parse(readText(path))
 }
 
 function readCliVersion() {
-  const source = readFileSync("cli/src/version.ts", "utf8")
+  const source = readText("cli/src/version.ts")
   const match = source.match(/CLI_VERSION\s*=\s*"([^"]+)"/)
 
   if (!match) {
@@ -29,7 +36,7 @@ function readCliVersion() {
 }
 
 function readTopChangelogEntry() {
-  const changelog = readFileSync("CHANGELOG.md", "utf8")
+  const changelog = readText("CHANGELOG.md")
   const lines = changelog.split(/\r?\n/)
   const topEntry = lines.find((line) => /^## \[/.test(line))
 
@@ -37,7 +44,7 @@ function readTopChangelogEntry() {
     fail("CHANGELOG.md is missing a version heading")
   }
 
-  return { changelog, lines, topEntry }
+  return { lines, topEntry }
 }
 
 function ensureTopEntryHasSection(lines, topEntry) {
@@ -58,7 +65,7 @@ function ensureTopEntryHasSection(lines, topEntry) {
 }
 
 function ensureFormulaTemplatePlaceholders() {
-  const formula = readFileSync("Formula/agent-notify.rb", "utf8")
+  const formula = readText("Formula/agent-notify.rb")
 
   for (const placeholder of [
     "HOMEBREW_VERSION_PLACEHOLDER",
@@ -110,4 +117,4 @@ if (!topEntry.startsWith(`## [${version}] — `)) {
 ensureTopEntryHasSection(lines, topEntry)
 ensureFormulaTemplatePlaceholders()
 
-console.log(`release checks passed for ${version}`)
+console.log(`release checks passed for ${version} in ${repoRoot}`)

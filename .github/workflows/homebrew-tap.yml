@@ -48,12 +48,20 @@ jobs:
             echo "::error::Tag $RELEASE_TAG does not exist on origin"
             exit 1
           fi
-          git checkout --detach "refs/tags/$RELEASE_TAG"
+
+      - name: Check out release source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          ref: ${{ env.RELEASE_TAG }}
+          path: release-src
 
       - name: Check release files
         run: node scripts/check-release.mjs
         env:
           RELEASE_TAG: ${{ env.RELEASE_TAG }}
+          REPO_ROOT: ${{ github.workspace }}/release-src
 
       - name: Ensure GitHub Release exists
         env:
@@ -85,4 +93,5 @@ jobs:
           X64_SHA: ${{ steps.shas.outputs.x64 }}
           HOMEBREW_TAP_DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
           HOMEBREW_TAP_KNOWN_HOSTS: ${{ secrets.HOMEBREW_TAP_KNOWN_HOSTS }}
+          REPO_ROOT: ${{ github.workspace }}/release-src
         run: bash ./scripts/update-homebrew-tap.sh
