@@ -88,6 +88,8 @@ agent-notify test done                         # send a test notification
 agent-notify test permission                   # send a permission test notification
 agent-notify sounds            # list available sounds
 agent-notify sounds --play Morse
+agent-notify status            # explain whether notifications would send right now
+agent-notify explain           # alias for status
 agent-notify init              # re-run setup wizard
 agent-notify install all       # install all supported integrations
 agent-notify uninstall pi      # remove one integration
@@ -211,6 +213,16 @@ agent-notify doctor
 ```
 
 It checks config validity, backend detection, notification permissions, focus state, quiet hours, helper availability, and sound files in one pass.
+
+For a faster "would this notify right now?" view, run:
+
+```sh
+agent-notify status
+agent-notify status --tool claude-code
+agent-notify explain --tool opencode
+```
+
+This reports the effective backend, detected terminal app, current focus state, quiet-hours state, cooldown state, and whether `done`, `question`, and `permission` would currently send or be suppressed.
 
 ### Config errors
 

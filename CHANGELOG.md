@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.49] — 2026-04-28
+
+### Added
+- New `agent-notify status` command plus `agent-notify explain` alias to show whether `done`, `question`, and `permission` notifications would send right now, including backend, focus, quiet-hours, and cooldown state
+
 ## [0.1.48] — 2026-04-28
 
 ### Changed

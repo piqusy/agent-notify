@@ -5,6 +5,7 @@ import { cmdInit } from "./commands/init.js";
 import { cmdConfig } from "./commands/config.js";
 import { cmdDoctor } from "./commands/doctor.js";
 import { cmdDone, cmdPermission, cmdQuestion, cmdTest } from "./commands/notify.js";
+import { cmdStatus, cmdExplain } from "./commands/status.js";
 import { cmdInstall, cmdUninstall } from "./commands/install.js";
 import { playSoundSync } from "./sounds/play.js";
 import { CLI_VERSION } from "./version.js";
@@ -50,6 +51,8 @@ Usage:
   agent-notify init                        Interactive setup/edit wizard
   agent-notify config edit                 Edit existing config in the wizard
   agent-notify doctor                      Run diagnostics
+  agent-notify status [--tool <name>]      Show whether notifications would send right now
+  agent-notify explain [--tool <name>]     Alias for status
   agent-notify install [all|pi|opencode|claude-code]
                                           Install integration(s)
   agent-notify uninstall [all|pi|opencode|claude-code]
@@ -84,6 +87,12 @@ async function main(): Promise<void> {
       break;
     case "doctor":
       await cmdDoctor();
+      break;
+    case "status":
+      await cmdStatus(args);
+      break;
+    case "explain":
+      await cmdExplain(args);
       break;
     case "install":
       await cmdInstall(args);
