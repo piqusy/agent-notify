@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.4] — 2026-04-28
+
+### Changed
+- Homebrew tap publishing now keeps only the rolling `agent-notify` formula instead of creating patch-specific `agent-notify@x.y.z` entries for every release
+- Release docs and GitHub Release notes now direct exact historical version installs to GitHub release assets instead of Homebrew patch formulas
+
 ## [0.2.3] — 2026-04-28
 
 ### Added

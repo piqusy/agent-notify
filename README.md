@@ -39,11 +39,7 @@ brew tap piqusy/tap
 brew install agent-notify
 ```
 
-Exact release pinning:
-
-```sh
-brew install piqusy/tap/agent-notify@<version>
-```
+For exact historical versions, use the standalone assets attached to each GitHub Release.
 
 ### Standalone binaries
 

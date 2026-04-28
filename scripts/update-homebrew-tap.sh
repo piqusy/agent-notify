@@ -6,7 +6,6 @@ set -euo pipefail
 : "${X64_SHA:?X64_SHA is required}"
 
 VERSION_NO_V="${VERSION#v}"
-VERSION_CLASS="AgentNotifyAT${VERSION_NO_V//./}"
 WORKDIR="$(mktemp -d)"
 TAP_REPO="${HOMEBREW_TAP_REPO:-git@github-tap:piqusy/homebrew-tap.git}"
 REPO_ROOT="${GITHUB_WORKSPACE:-$(pwd)}"
@@ -30,28 +29,6 @@ for placeholder, value in replacements.items():
     if placeholder not in text:
         raise SystemExit(f"missing placeholder in formula template: {placeholder}")
     text = text.replace(placeholder, value)
-Path(dst).write_text(text)
-PY
-}
-
-render_versioned_formula() {
-  local src="$1"
-  local dst="$2"
-  python3 - "$src" "$dst" "$VERSION_CLASS" <<'PY'
-from pathlib import Path
-import sys
-
-src, dst, version_class = sys.argv[1:]
-text = Path(src).read_text()
-replacements = {
-    "class AgentNotify < Formula": f"class {version_class} < Formula",
-    "This formula is auto-updated by the release workflow.": "This formula is a versioned release formula.",
-    "Do not manually edit the version, arm64_sha256, or x64_sha256 fields.": "Do not manually edit the version or SHA fields.",
-}
-for old, new in replacements.items():
-    if old not in text:
-        raise SystemExit(f"missing expected text in formula template: {old}")
-    text = text.replace(old, new)
 Path(dst).write_text(text)
 PY
 }
@@ -86,11 +63,17 @@ cd "$WORKDIR"
 mkdir -p Formula
 
 render_formula "$REPO_ROOT/Formula/agent-notify.rb" "Formula/agent-notify.rb"
-render_versioned_formula "Formula/agent-notify.rb" "Formula/agent-notify@${VERSION_NO_V}.rb"
+
+shopt -s nullglob
+old_versioned_formulas=(Formula/agent-notify@*.rb)
+if ((${#old_versioned_formulas[@]} > 0)); then
+  git rm -f --ignore-unmatch "${old_versioned_formulas[@]}"
+fi
+shopt -u nullglob
 
 git config user.name "github-actions[bot]"
 git config user.email "github-actions[bot]@users.noreply.github.com"
-git add Formula/agent-notify.rb "Formula/agent-notify@${VERSION_NO_V}.rb"
+git add Formula/agent-notify.rb
 
 if git diff --cached --quiet; then
   echo "Homebrew tap already up to date"

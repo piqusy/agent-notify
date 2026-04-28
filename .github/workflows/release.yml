@@ -328,10 +328,7 @@ jobs:
           brew install agent-notify
           \`\`\`
 
-          Exact version:
-          \`\`\`sh
-          brew install piqusy/tap/agent-notify@${{ steps.version.outputs.no_v }}
-          \`\`\`
+          For exact historical versions, use the standalone assets attached to this release.
 
           ## Standalone binaries
 
