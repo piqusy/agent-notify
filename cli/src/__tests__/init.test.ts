@@ -88,6 +88,7 @@ vi.mock("../sounds/play.js", () => ({
 import { cmdInit } from "../commands/init.js"
 
 describe("cmdInit", () => {
+  const originalPlatform = process.platform
   const originalTermProgram = process.env.TERM_PROGRAM
   const originalZellij = process.env.ZELLIJ
   const tempDirs: string[] = []
@@ -105,6 +106,7 @@ describe("cmdInit", () => {
   })
 
   afterEach(() => {
+    Object.defineProperty(process, "platform", { value: originalPlatform, configurable: true })
     process.env.TERM_PROGRAM = originalTermProgram
     process.env.ZELLIJ = originalZellij
     vi.restoreAllMocks()
@@ -132,6 +134,7 @@ describe("cmdInit", () => {
       },
     }
 
+    Object.defineProperty(process, "platform", { value: "darwin", configurable: true })
     process.env.TERM_PROGRAM = "ghostty"
     process.env.ZELLIJ = "1"
 
