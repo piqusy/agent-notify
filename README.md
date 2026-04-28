@@ -55,6 +55,18 @@ Download the asset matching your OS/CPU from the latest [GitHub Release](https:/
 
 Each archive contains the CLI binary under `bin/` plus the bundled integration files.
 
+#### Windows standalone quick start
+
+1. Download `agent-notify-windows-x64.zip`
+2. Extract it somewhere like `C:\Tools\agent-notify\`
+3. Run the binary directly:
+
+```powershell
+C:\Tools\agent-notify\bin\agent-notify.exe --version
+```
+
+Optional: add `C:\Tools\agent-notify\bin` to your `PATH` so you can run `agent-notify` from any terminal.
+
 ### From source
 
 Requires [bun](https://bun.sh).
@@ -259,8 +271,21 @@ For Pi specifically, rerun `./install.sh` after editing `packages/pi-coding-agen
 - **macOS native helper missing** — if you installed from source on macOS, rerun `bun run build` and make sure the helper app was built successfully.
 - **Linux backend** — make sure `notify-send` is installed and available on `PATH`, even when using the standalone binary.
 - **Windows backend** — make sure PowerShell is available. BurntToast is preferred; without it, agent-notify falls back to a message box.
+- **Windows standalone zip** — after extracting, run `bin\\agent-notify.exe --version` once to confirm the binary starts before wiring integrations.
 - **Fallback backend** — if the macOS helper app is unavailable, agent-notify can fall back to `osascript`, but the bundled helper is the supported macOS path.
 - **Focus detection** — if your terminal is the frontmost app, notifications are suppressed by design. Switch to another app or set `"terminalApp": null` in config to disable focus detection entirely.
+
+### Windows toast notifications
+
+For native Windows toast notifications, install the BurntToast PowerShell module:
+
+```powershell
+Install-Module BurntToast -Scope CurrentUser
+```
+
+If PowerShell asks to trust `PSGallery`, accept it. After installing, restart your terminal/PowerShell session and rerun `agent-notify test done --force`.
+
+Without BurntToast, agent-notify falls back to a simple message box. That fallback still notifies you, but it is less native than a proper toast.
 
 ### No sound
 

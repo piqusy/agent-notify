@@ -162,9 +162,94 @@ jobs:
           path: release-src/dist/${{ matrix.outfile }}
           if-no-files-found: error
 
+  smoke:
+    name: Smoke (${{ matrix.outfile }})
+    needs: build
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            outfile: agent-notify-linux-x64
+            binary_name: agent-notify
+          - os: windows-latest
+            outfile: agent-notify-windows-x64
+            binary_name: agent-notify.exe
+
+    steps:
+      - name: Download built artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ matrix.outfile }}
+          path: dist/${{ matrix.outfile }}
+
+      - name: Smoke test Linux binary and backend path
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          mkdir -p ci-bin
+          cat > ci-bin/notify-send <<'EOF'
+          #!/usr/bin/env bash
+          printf '%s\n' "$*" > "$RUNNER_TEMP/notify-send-args.txt"
+          exit 0
+          EOF
+          chmod +x ci-bin/notify-send
+          export PATH="$PWD/ci-bin:$PATH"
+
+          binary="dist/${{ matrix.outfile }}/bin/${{ matrix.binary_name }}"
+          chmod +x "$binary"
+          "$binary" --help > /dev/null
+          "$binary" --version
+          "$binary" status --tool smoke-test
+          "$binary" test done --force
+
+          test -f "$RUNNER_TEMP/notify-send-args.txt"
+          grep -F -- "Test — Done" "$RUNNER_TEMP/notify-send-args.txt"
+
+      - name: Smoke test Windows binary and backend path
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $shimDir = Join-Path $PWD "ci-bin"
+          New-Item -ItemType Directory -Force -Path $shimDir | Out-Null
+          $shimPath = Join-Path $shimDir "powershell.cmd"
+          @"
+          @echo off
+          setlocal
+          > "%RUNNER_TEMP%\powershell-args.txt" echo %*
+          exit /b 0
+          "@ | Set-Content -Path $shimPath -Encoding ASCII
+          $env:PATH = "$shimDir;$env:PATH"
+
+          $binary = "dist/${{ matrix.outfile }}/bin/${{ matrix.binary_name }}"
+          & $binary --help | Out-Null
+          & $binary --version
+          & $binary status --tool smoke-test
+          & $binary test done --force
+
+          $argsFile = Join-Path $env:RUNNER_TEMP "powershell-args.txt"
+          if (!(Test-Path $argsFile)) {
+            throw "powershell shim was not invoked"
+          }
+
+          $captured = Get-Content $argsFile -Raw
+          if ($captured -notmatch '-EncodedCommand\s+([^\s]+)') {
+            throw "Encoded PowerShell payload not found in shim invocation"
+          }
+
+          $encoded = $Matches[1]
+          $decoded = [System.Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($encoded))
+          if ($decoded -notmatch 'Test — Done') {
+            throw "Decoded PowerShell payload did not contain the expected notification title"
+          }
+
   publish:
     name: Create Release
-    needs: build
+    needs: [build, smoke]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:

@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.1] — 2026-04-28
+
+### Added
+- Release smoke tests now verify the Linux `notify-send` and Windows PowerShell backend command paths from the shipped binaries before publishing
+
+### Changed
+- Windows standalone install docs now cover zip extraction, PATH/manual launch, BurntToast setup, and fallback behavior more explicitly
+
 ## [0.2.0] — 2026-04-28
 
 ### Added
