@@ -3,7 +3,7 @@ import { existsSync } from "node:fs"
 import {
   defaultConfigPath,
   loadConfigResult,
-  resolveTerminalApp,
+  resolveTerminal,
   isTerminalFocused,
   isQuietHour,
   detectMacOSBackend,
@@ -144,8 +144,24 @@ export async function cmdDoctor(): Promise<void> {
     }
   }
 
-  const termProgram = process.env.TERM_PROGRAM ?? ""
-  const termApp = config.terminalApp ?? resolveTerminalApp(termProgram)
+  const resolvedTerminal = resolveTerminal({
+    configOverride: config.terminalApp,
+    env: process.env,
+    termProgram: process.env.TERM_PROGRAM ?? "",
+  })
+  const termApp = resolvedTerminal?.displayName ?? null
+  if (resolvedTerminal) {
+    const sourceLabel = resolvedTerminal.source === "config-override"
+      ? "manual override"
+      : resolvedTerminal.source === "env-override"
+        ? "env override"
+        : resolvedTerminal.source
+    line(OK, "Terminal", `${resolvedTerminal.displayName} — ${sourceLabel} (${resolvedTerminal.reason})`)
+  } else {
+    const termProgram = process.env.TERM_PROGRAM ?? ""
+    line(WARN, "Terminal", `Could not detect terminal app (TERM_PROGRAM=${termProgram || "(empty)"})`)
+  }
+
   if (termApp) {
     const focused = await isTerminalFocused(termApp)
     if (focused) {
@@ -154,7 +170,7 @@ export async function cmdDoctor(): Promise<void> {
       line(OK, "Focus", `${termApp} is not frontmost — notifications will be sent`)
     }
   } else {
-    line(WARN, "Focus", `Could not detect terminal app (TERM_PROGRAM=${termProgram || "(empty)"}) — focus check skipped`)
+    line(WARN, "Focus", "Focus check skipped because terminal detection failed")
   }
 
   if (config.quietHours === null) {

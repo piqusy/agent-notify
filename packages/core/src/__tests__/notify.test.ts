@@ -28,7 +28,7 @@ vi.mock("../cooldown.js", () => ({
 
 vi.mock("../focus.js", () => ({
   isTerminalFocused: vi.fn(async () => false),
-  resolveTerminalApp: vi.fn(() => null),
+  resolveTerminal: vi.fn(() => null),
 }))
 
 import { isQuietHour, notify } from "../notify.js"
@@ -191,6 +191,56 @@ describe("notify integration (skip in CI — uses real config/fs)", () => {
           }),
         }),
         macosHelperKeepAliveSeconds: 45,
+      }),
+      expect.anything(),
+    )
+  })
+
+  it("attaches canonical terminal metadata to the click payload when known", async () => {
+    const focus = await import("../focus.js")
+    vi.mocked(focus.resolveTerminal).mockReturnValueOnce({
+      id: "kitty",
+      displayName: "kitty",
+      bundleId: "net.kovidgoyal.kitty",
+      source: "env",
+      reason: "KITTY_WINDOW_ID",
+    })
+
+    const { loadConfigResult } = await import("../config.js")
+    vi.mocked(loadConfigResult).mockResolvedValueOnce({
+      path: "/tmp/agent-notify-test-config.json",
+      status: "ok",
+      issues: [],
+      config: {
+        events: { done: true, question: true, permission: true },
+        terminalApp: null,
+        clickRestore: { enabled: true },
+        cooldownSeconds: 0,
+        quietHours: null,
+        sounds: { done: null, question: null, permission: null },
+        backend: null,
+        zellij: {
+          tabIndicator: { enabled: true, prefix: " ● " },
+          paneIndicator: { enabled: false, mode: "background", bg: "#3c3836", clearOn: "origin-pane-focus" },
+        },
+      },
+    })
+
+    vi.spyOn(zellij, "isZellijSession").mockReturnValue(false)
+    const sendNotification = vi.spyOn(platform, "sendNotification").mockResolvedValue(undefined)
+
+    await notify({ state: "done", tool: "test", cwd: "/tmp/project" })
+
+    expect(sendNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clickTarget: expect.objectContaining({
+          terminalApp: "kitty",
+          terminal: {
+            id: "kitty",
+            displayName: "kitty",
+            bundleId: "net.kovidgoyal.kitty",
+          },
+        }),
       }),
       expect.anything(),
     )

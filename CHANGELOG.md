@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.2.3] — 2026-04-28
+
+### Added
+- Registry-based terminal detection with strong env markers, canonical terminal identities, and broader support for iTerm2, Terminal, Warp, kitty, WezTerm, Hyper, Ghostty, Alacritty, VS Code, GNOME Terminal, Konsole, foot, Rio, and Tabby
+
+### Changed
+- macOS terminal auto-detection now falls back to the parent process tree when env-based detection does not identify the terminal
+- `agent-notify status`, `agent-notify doctor`, and `agent-notify init` now report the detected terminal and detection reason/source instead of relying on `$TERM_PROGRAM` alone
+- macOS click-to-restore payloads now include canonical terminal metadata, and the helper now prefers bundle-id or running-app activation before name-based fallback
+
 ## [0.2.2] — 2026-04-28
 
 ### Added

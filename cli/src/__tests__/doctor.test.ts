@@ -23,7 +23,13 @@ const coreMock = vi.hoisted(() => ({
       { path: "backend", message: "Expected one of macos-helper, osascript, notify-send, powershell or null" },
     ],
   })),
-  resolveTerminalApp: vi.fn(() => null),
+  resolveTerminal: vi.fn(() => ({
+    id: "kitty",
+    displayName: "kitty",
+    bundleId: "net.kovidgoyal.kitty",
+    source: "env",
+    reason: "KITTY_WINDOW_ID",
+  })),
   isTerminalFocused: vi.fn(async () => false),
   isQuietHour: vi.fn(() => false),
   detectMacOSBackend: vi.fn(async () => "notify-send"),
@@ -55,6 +61,7 @@ describe("cmdDoctor", () => {
 
     expect(coreMock.loadConfigResult).toHaveBeenCalledOnce()
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("invalid settings reset to defaults"))
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("kitty — env (KITTY_WINDOW_ID)"))
     expect(logSpy).toHaveBeenCalledWith("                    - quietHours.start: Expected an integer between 0 and 23")
     expect(logSpy).toHaveBeenCalledWith("                    - backend: Expected one of macos-helper, osascript, notify-send, powershell or null")
   })

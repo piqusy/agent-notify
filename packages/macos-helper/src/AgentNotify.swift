@@ -126,9 +126,16 @@ struct ZellijClickTarget: Decodable {
   let tabName: String?
 }
 
+struct TerminalClickTarget: Decodable {
+  let id: String?
+  let displayName: String?
+  let bundleId: String?
+}
+
 struct NotificationClickTarget: Decodable {
   let issuedAt: TimeInterval?
   let terminalApp: String?
+  let terminal: TerminalClickTarget?
   let zellij: ZellijClickTarget?
 }
 
@@ -154,7 +161,7 @@ func logClickTargetSummary(_ target: NotificationClickTarget?, logger: Logger, c
   }
 
   logger.log(
-    "\(context)=present issuedAt=\(target.issuedAt != nil) terminalApp=\(target.terminalApp != nil) zellij=\(target.zellij != nil)"
+    "\(context)=present issuedAt=\(target.issuedAt != nil) terminalApp=\(target.terminalApp != nil) terminal=\(target.terminal != nil) zellij=\(target.zellij != nil)"
   )
 }
 
@@ -253,14 +260,82 @@ func runProcess(
   }
 }
 
+func normalizedApplicationName(_ value: String?) -> String? {
+  guard let value else { return nil }
+  let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+  return trimmed.isEmpty ? nil : trimmed.lowercased()
+}
+
 @discardableResult
-func activateApplication(named appName: String, logger: Logger) -> Bool {
-  runProcess(
-    executable: "/usr/bin/osascript",
-    arguments: ["-e", "tell application \(appleScriptStringLiteral(appName)) to activate"],
-    logger: logger,
-    label: "activate_app"
-  )
+func activateRunningApplication(bundleIdentifier: String, logger: Logger) -> Bool {
+  let runningApps = NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier)
+  guard let app = runningApps.first else {
+    logger.log("activate_app_running=missing bundleId=\(bundleIdentifier)")
+    return false
+  }
+
+  let success = app.activate(options: [.activateAllWindows])
+  logger.log("activate_app_running=\(success ? "success" : "failure") bundleId=\(bundleIdentifier)")
+  return success
+}
+
+@discardableResult
+func activateRunningApplication(named appName: String, logger: Logger) -> Bool {
+  let normalized = normalizedApplicationName(appName)
+  guard let normalized else { return false }
+
+  let runningApp = NSWorkspace.shared.runningApplications.first {
+    normalizedApplicationName($0.localizedName) == normalized
+  }
+
+  guard let runningApp else {
+    logger.log("activate_app_running=missing name=\(appName)")
+    return false
+  }
+
+  let success = runningApp.activate(options: [.activateAllWindows])
+  logger.log("activate_app_running=\(success ? "success" : "failure") name=\(appName)")
+  return success
+}
+
+@discardableResult
+func activateApplication(bundleIdentifier: String?, appName: String?, logger: Logger) -> Bool {
+  if let bundleIdentifier, !bundleIdentifier.isEmpty {
+    if activateRunningApplication(bundleIdentifier: bundleIdentifier, logger: logger) {
+      logger.log("activate_app=success method=running-bundle-id")
+      return true
+    }
+
+    if runProcess(
+      executable: "/usr/bin/open",
+      arguments: ["-b", bundleIdentifier],
+      logger: logger,
+      label: "activate_app_bundle"
+    ) {
+      logger.log("activate_app=success method=open-bundle-id")
+      return true
+    }
+  }
+
+  if let appName, !appName.isEmpty {
+    if activateRunningApplication(named: appName, logger: logger) {
+      logger.log("activate_app=success method=running-name")
+      return true
+    }
+
+    if runProcess(
+      executable: "/usr/bin/osascript",
+      arguments: ["-e", "tell application \(appleScriptStringLiteral(appName)) to activate"],
+      logger: logger,
+      label: "activate_app_name"
+    ) {
+      logger.log("activate_app=success method=name")
+      return true
+    }
+  }
+
+  logger.log("activate_app=failure")
+  return false
 }
 
 @discardableResult
@@ -435,8 +510,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
           logger.log("restore_zellij=skipped reason=missing-zellij-target")
         }
 
-        if let terminalApp = decoded.terminalApp, !terminalApp.isEmpty {
-          _ = activateApplication(named: terminalApp, logger: logger)
+        let terminalName = decoded.terminal?.displayName ?? decoded.terminalApp
+        let bundleId = decoded.terminal?.bundleId
+        if (bundleId?.isEmpty == false) || (terminalName?.isEmpty == false) {
+          _ = activateApplication(bundleIdentifier: bundleId, appName: terminalName, logger: logger)
         } else {
           logger.log("activate_app=skipped reason=missing-terminal-app")
         }

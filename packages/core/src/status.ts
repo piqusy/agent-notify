@@ -1,7 +1,8 @@
 import type { NotifyBackend, NotifySkipReason, NotifyTrigger } from "./types.js"
 import { loadConfigResult, type ConfigLoadStatus, type ConfigValidationIssue } from "./config.js"
 import { cooldownFilePath, getCooldownState } from "./cooldown.js"
-import { resolveTerminalApp, isTerminalFocused } from "./focus.js"
+import { resolveTerminal, isTerminalFocused } from "./focus.js"
+import type { ResolvedTerminal } from "./terminal.js"
 import { isZellijSession, isPaneTabActive } from "./zellij.js"
 import { detectMacOSBackend } from "./platform/index.js"
 import { isQuietHour } from "./notify.js"
@@ -13,6 +14,7 @@ export interface EventDeliveryStatus {
 }
 
 export interface FocusInspection {
+  terminal: ResolvedTerminal | null
   terminalApp: string | null
   terminalFocused: boolean
   zellijSession: boolean
@@ -58,7 +60,12 @@ export async function inspectStatus(options: { tool?: string } = {}): Promise<St
     ? await detectMacOSBackend(config.backend)
     : platformBackend()
 
-  const terminalApp = config.terminalApp ?? resolveTerminalApp(process.env.TERM_PROGRAM ?? "")
+  const terminal = resolveTerminal({
+    configOverride: config.terminalApp,
+    env: process.env,
+    termProgram: process.env.TERM_PROGRAM ?? "",
+  })
+  const terminalApp = terminal?.displayName ?? null
   const zellijSession = isZellijSession()
   const terminalFocused = terminalApp !== null ? await isTerminalFocused(terminalApp) : false
   let activeTabVisible: boolean | null = null
@@ -99,6 +106,7 @@ export async function inspectStatus(options: { tool?: string } = {}): Promise<St
     configIssues: configResult.issues,
     backend,
     focus: {
+      terminal,
       terminalApp,
       terminalFocused,
       zellijSession,

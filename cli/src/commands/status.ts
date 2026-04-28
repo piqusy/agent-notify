@@ -23,6 +23,19 @@ function formatConfigStatus(status: string): string {
   return "Invalid settings — partial defaults applied"
 }
 
+function formatTerminal(detail: Awaited<ReturnType<typeof inspectStatus>>["focus"]): string {
+  if (detail.terminal === null) {
+    return "Auto-detect unavailable"
+  }
+
+  const sourceLabel = detail.terminal.source === "config-override"
+    ? "manual override"
+    : detail.terminal.source === "env-override"
+      ? "env override"
+      : detail.terminal.source
+  return `${detail.terminal.displayName} — ${sourceLabel} (${detail.terminal.reason})`
+}
+
 function formatFocus(detail: Awaited<ReturnType<typeof inspectStatus>>["focus"]): string {
   if (detail.terminalApp === null) {
     return "Skipped — terminal app could not be detected"
@@ -62,7 +75,7 @@ export async function cmdStatus(rawArgs: string[]): Promise<void> {
   }
 
   line("Backend", status.backend ?? `Unsupported platform (${process.platform})`)
-  line("Terminal", status.focus.terminalApp ?? "Auto-detect unavailable")
+  line("Terminal", formatTerminal(status.focus))
   line("Focus", formatFocus(status.focus))
   line(
     "Quiet hours",

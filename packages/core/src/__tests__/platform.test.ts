@@ -79,6 +79,11 @@ describe("sendNotification", () => {
         clickTarget: {
           issuedAt: 1_777_324_000,
           terminalApp: "Ghostty",
+          terminal: {
+            id: "ghostty",
+            displayName: "Ghostty",
+            bundleId: "com.mitchellh.ghostty",
+          },
           zellij: { sessionName: "dev", tabId: 7, tabName: "api" },
         },
         macosHelperKeepAliveSeconds: 90,
@@ -90,6 +95,11 @@ describe("sendNotification", () => {
     const encodedTarget = Buffer.from(JSON.stringify({
       issuedAt: 1_777_324_000,
       terminalApp: "Ghostty",
+      terminal: {
+        id: "ghostty",
+        displayName: "Ghostty",
+        bundleId: "com.mitchellh.ghostty",
+      },
       zellij: { sessionName: "dev", tabId: 7, tabName: "api" },
     }), "utf8").toString("base64");
 

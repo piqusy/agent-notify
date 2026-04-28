@@ -7,8 +7,8 @@ import {
   defaultConfigPath,
   loadConfigResult,
   notify,
-  TERM_PROGRAM_MAP,
-  resolveTerminalApp,
+  KNOWN_TERMINAL_APPS,
+  resolveTerminal,
 } from "@agent-notify/core"
 import type { Config, NotifyBackend } from "@agent-notify/core"
 import { ask } from "../prompts/cancel.js"
@@ -35,8 +35,8 @@ const SOUND_CHOICES = [
 ]
 
 const TERMINAL_CHOICES: Array<{ name: string; value: SelectChoiceValue }> = [
-  { name: "Auto-detect from $TERM_PROGRAM", value: null },
-  ...(Object.values(TERM_PROGRAM_MAP) as string[]).map((app) => ({ name: app, value: app as string | null })),
+  { name: "Auto-detect (env markers, TERM_PROGRAM, process tree)", value: null },
+  ...KNOWN_TERMINAL_APPS.map((app) => ({ name: app, value: app as string | null })),
   { name: "Other (type manually)", value: CUSTOM_CHOICE },
 ]
 
@@ -147,10 +147,12 @@ export async function cmdInit(options: CmdInitOptions = {}): Promise<void> {
     default: existingConfig.backend,
   }))
 
-  const detectedTerminal = process.env.TERM_PROGRAM
-    ? (TERM_PROGRAM_MAP[process.env.TERM_PROGRAM] ?? null)
-    : null
-  const terminalChoices = getTerminalChoices(detectedTerminal)
+  const detectedTerminal = resolveTerminal({
+    configOverride: null,
+    env: process.env,
+    termProgram: process.env.TERM_PROGRAM ?? "",
+  })
+  const terminalChoices = getTerminalChoices(detectedTerminal?.displayName ?? null)
   const terminalChoiceDefault = getTerminalChoiceDefault(existingConfig.terminalApp, terminalChoices)
 
   let terminalApp: string | null = null
@@ -336,8 +338,12 @@ export async function cmdInit(options: CmdInitOptions = {}): Promise<void> {
 
   const hints: string[] = []
   if (config.terminalApp === null) {
-    const resolved = resolveTerminalApp(process.env.TERM_PROGRAM ?? "")
-    if (resolved) hints.push(`  terminalApp: null → will auto-detect as "${resolved}" at runtime`)
+    const resolved = resolveTerminal({
+      configOverride: null,
+      env: process.env,
+      termProgram: process.env.TERM_PROGRAM ?? "",
+    })
+    if (resolved) hints.push(`  terminalApp: null → will auto-detect as "${resolved.displayName}" at runtime (${resolved.reason})`)
   }
   if (config.quietHours === null) {
     hints.push("  quietHours: null → quiet hours disabled, sounds play at all times")

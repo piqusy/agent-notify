@@ -36,7 +36,7 @@ vi.mock("../cooldown.js", () => ({
 
 vi.mock("../focus.js", () => ({
   isTerminalFocused: vi.fn(async () => false),
-  resolveTerminalApp: vi.fn(() => null),
+  resolveTerminal: vi.fn(() => null),
 }))
 
 import { notify } from "../notify.js"

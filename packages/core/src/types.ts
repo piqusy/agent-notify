@@ -52,9 +52,16 @@ export interface Config {
   zellij:          ZellijConfig
 }
 
+export interface NotificationClickTerminalTarget {
+  id?: string | null
+  displayName?: string | null
+  bundleId?: string | null
+}
+
 export interface NotificationClickTarget {
   issuedAt?: number
   terminalApp?: string | null
+  terminal?: NotificationClickTerminalTarget
   zellij?: {
     sessionName?: string | null
     tabId?: number | null

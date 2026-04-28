@@ -6,6 +6,13 @@ const inspectStatusMock = vi.hoisted(() => vi.fn(async () => ({
   configIssues: [{ path: "backend", message: "Expected one of macos-helper, osascript, notify-send, powershell or null" }],
   backend: "macos-helper",
   focus: {
+    terminal: {
+      id: "ghostty",
+      displayName: "Ghostty",
+      bundleId: "com.mitchellh.ghostty",
+      source: "term-program",
+      reason: "TERM_PROGRAM=ghostty",
+    },
     terminalApp: "Ghostty",
     terminalFocused: true,
     zellijSession: false,
@@ -49,6 +56,7 @@ describe("cmdStatus", () => {
     expect(inspectStatusMock).toHaveBeenCalledWith({ tool: "claude-code" })
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("agent-notify status"))
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Config"))
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Ghostty — term-program (TERM_PROGRAM=ghostty)"))
     expect(logSpy).toHaveBeenCalledWith("                    - backend: Expected one of macos-helper, osascript, notify-send, powershell or null")
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("Active for tool \"claude-code\" — 2s remaining"))
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining("done: suppressed (terminal-focused)"))

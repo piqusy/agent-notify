@@ -27,7 +27,13 @@ vi.mock("../cooldown.js", () => ({
 }))
 
 vi.mock("../focus.js", () => ({
-  resolveTerminalApp: vi.fn(() => "Ghostty"),
+  resolveTerminal: vi.fn(() => ({
+    id: "ghostty",
+    displayName: "Ghostty",
+    bundleId: "com.mitchellh.ghostty",
+    source: "term-program",
+    reason: "TERM_PROGRAM=ghostty",
+  })),
   isTerminalFocused: vi.fn(async () => false),
 }))
 
@@ -51,6 +57,13 @@ describe("inspectStatus", () => {
     const status = await inspectStatus({ tool: "cli" })
 
     expect(status.focus.terminalApp).toBe("Ghostty")
+    expect(status.focus.terminal).toEqual({
+      id: "ghostty",
+      displayName: "Ghostty",
+      bundleId: "com.mitchellh.ghostty",
+      source: "term-program",
+      reason: "TERM_PROGRAM=ghostty",
+    })
     expect(status.events.done).toEqual({ enabled: true, wouldSend: true })
     expect(status.events.question).toEqual({ enabled: true, wouldSend: true })
     expect(status.events.permission).toEqual({ enabled: true, wouldSend: true })

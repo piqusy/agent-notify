@@ -1,28 +1,16 @@
 import { exec } from "node:child_process"
 import { promisify } from "node:util"
 
+export {
+  KNOWN_TERMINAL_APPS,
+  TERMINAL_REGISTRY,
+  TERM_PROGRAM_MAP,
+  findTerminalDescriptorByAppName,
+  resolveTerminal,
+  resolveTerminalApp,
+} from "./terminal.js"
+
 const execAsync = promisify(exec)
-
-export const TERM_PROGRAM_MAP: Record<string, string> = {
-  ghostty:       "Ghostty",
-  "iTerm.app":   "iTerm2",
-  Apple_Terminal: "Terminal",
-  WarpTerminal:  "Warp",
-  alacritty:     "Alacritty",
-  kitty:         "kitty",
-  hyper:         "Hyper",
-}
-
-/**
- * Resolve the display name of the user's terminal app.
- * Priority: AGENT_NOTIFY_TERMINAL env var → TERM_PROGRAM_MAP[termProgram] → null (skip focus check)
- */
-export function resolveTerminalApp(termProgram: string): string | null {
-  if (process.env.AGENT_NOTIFY_TERMINAL) {
-    return process.env.AGENT_NOTIFY_TERMINAL
-  }
-  return TERM_PROGRAM_MAP[termProgram] ?? null
-}
 
 /**
  * Returns true if the given terminal app is currently frontmost on macOS.

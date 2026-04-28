@@ -25,7 +25,29 @@ const mockState = vi.hoisted(() => ({
     issues: [],
   })),
   notify: vi.fn(async () => undefined),
-  resolveTerminalApp: vi.fn((term: string) => ({ ghostty: "Ghostty", kitty: "Kitty", wezterm: "WezTerm" }[term] ?? null)),
+  resolveTerminal: vi.fn(({ termProgram }: { termProgram?: string }) => ({
+    ghostty: {
+      id: "ghostty",
+      displayName: "Ghostty",
+      bundleId: "com.mitchellh.ghostty",
+      source: "term-program",
+      reason: "TERM_PROGRAM=ghostty",
+    },
+    kitty: {
+      id: "kitty",
+      displayName: "kitty",
+      bundleId: "net.kovidgoyal.kitty",
+      source: "env",
+      reason: "KITTY_WINDOW_ID",
+    },
+    WezTerm: {
+      id: "wezterm",
+      displayName: "WezTerm",
+      bundleId: "com.github.wez.wezterm",
+      source: "term-program",
+      reason: "TERM_PROGRAM=WezTerm",
+    },
+  }[termProgram ?? ""] ?? null)),
   selectConfigs: [] as Array<Record<string, unknown>>,
   inputConfigs: [] as Array<Record<string, unknown>>,
   confirmConfigs: [] as Array<Record<string, unknown>>,
@@ -43,8 +65,8 @@ vi.mock("@agent-notify/core", () => ({
   defaultConfigPath: "/tmp/agent-notify-test-config.json",
   loadConfigResult: mockState.loadConfigResult,
   notify: mockState.notify,
-  TERM_PROGRAM_MAP: { ghostty: "Ghostty", kitty: "Kitty", wezterm: "WezTerm" },
-  resolveTerminalApp: mockState.resolveTerminalApp,
+  KNOWN_TERMINAL_APPS: ["Ghostty", "kitty", "WezTerm", "Terminal"],
+  resolveTerminal: mockState.resolveTerminal,
 }))
 
 vi.mock("../prompts/cancel.js", () => ({
@@ -105,7 +127,7 @@ describe("cmdInit", () => {
     mockState.checkboxConfigs.length = 0
     mockState.loadConfigResult.mockClear()
     mockState.notify.mockClear()
-    mockState.resolveTerminalApp.mockClear()
+    mockState.resolveTerminal.mockClear()
     mockState.playSound.mockClear()
     vi.spyOn(console, "log").mockImplementation(() => undefined)
   })

@@ -4,7 +4,7 @@ import type { Config, NotifyPayload, NotifyResult, QuietHours, NotifyTrigger } f
 import type { NotifyInput } from "./types.js"
 import { loadConfigResult } from "./config.js"
 import { checkAndUpdateCooldown, cooldownFilePath } from "./cooldown.js"
-import { isTerminalFocused, resolveTerminalApp } from "./focus.js"
+import { isTerminalFocused, resolveTerminal } from "./focus.js"
 import { isZellijSession, isPaneTabActive, getCurrentTabInfo, markTabNotified } from "./zellij.js"
 import { resolveSound } from "./sounds.js"
 import { sendNotification } from "./platform/index.js"
@@ -75,7 +75,12 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
   } else if (configResult.status === "invalid-fields") {
     warnOnInvalidConfig(configResult.path, `${configResult.issues.length} invalid config setting${configResult.issues.length === 1 ? "" : "s"} in ${configResult.path}; invalid fields reset to defaults`)
   }
-  const terminalApp = config.terminalApp ?? resolveTerminalApp(process.env.TERM_PROGRAM ?? "")
+  const resolvedTerminal = resolveTerminal({
+    configOverride: config.terminalApp,
+    env: process.env,
+    termProgram: process.env.TERM_PROGRAM ?? "",
+  })
+  const terminalApp = resolvedTerminal?.displayName ?? null
 
   // 1. Event filter — use trigger if provided, otherwise fall back to state
   const eventKey = input.trigger ?? input.state
@@ -150,6 +155,13 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
       clickTarget: {
         issuedAt: Math.floor(Date.now() / 1000),
         ...(terminalApp !== null ? { terminalApp } : {}),
+        ...(resolvedTerminal ? {
+          terminal: {
+            ...(resolvedTerminal.id !== null ? { id: resolvedTerminal.id } : {}),
+            displayName: resolvedTerminal.displayName,
+            ...(resolvedTerminal.bundleId !== null ? { bundleId: resolvedTerminal.bundleId } : {}),
+          },
+        } : {}),
         ...(tabInfo || process.env.ZELLIJ_SESSION_NAME ? {
           zellij: {
             sessionName: process.env.ZELLIJ_SESSION_NAME ?? null,

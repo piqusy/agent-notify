@@ -211,7 +211,7 @@ agent-notify uninstall pi
 }
 ```
 
-`terminalApp: null` — auto-detected via `$TERM_PROGRAM`. Set to e.g. `"iTerm2"` to override.  
+`terminalApp: null` — auto-detected from terminal-specific env markers, `$TERM_PROGRAM`, and on macOS a parent-process fallback. This now covers common setups for iTerm2, Terminal, Warp, kitty, WezTerm, Hyper, Ghostty, Alacritty, VS Code, GNOME Terminal, Konsole, foot, Rio, and Tabby. Set it explicitly to e.g. `"iTerm2"` to override.
 `backend: null` — auto-detected. On modern macOS this prefers the bundled native helper app, then falls back to `osascript` only if the helper is unavailable.  
 `clickRestore.enabled: true` — on macOS helper notifications, clicking the notification restores the terminal app and attempts to switch to the originating Zellij tab.  
 `sounds.permission: null` — falls back to the question sound.  
@@ -244,7 +244,7 @@ agent-notify status --tool claude-code
 agent-notify explain --tool opencode
 ```
 
-This reports the effective backend, detected terminal app, current focus state, quiet-hours state, cooldown state, and whether `done`, `question`, and `permission` would currently send or be suppressed.
+This reports the effective backend, detected terminal app, how it was detected, current focus state, quiet-hours state, cooldown state, and whether `done`, `question`, and `permission` would currently send or be suppressed.
 
 ### Config errors
 
@@ -273,7 +273,7 @@ For Pi specifically, rerun `./install.sh` after editing `packages/pi-coding-agen
 - **Windows backend** — make sure PowerShell is available. BurntToast is preferred; without it, agent-notify falls back to a message box.
 - **Windows standalone zip** — after extracting, run `bin\\agent-notify.exe --version` once to confirm the binary starts before wiring integrations.
 - **Fallback backend** — if the macOS helper app is unavailable, agent-notify can fall back to `osascript`, but the bundled helper is the supported macOS path.
-- **Focus detection** — if your terminal is the frontmost app, notifications are suppressed by design. Switch to another app or set `"terminalApp": null` in config to disable focus detection entirely.
+- **Focus detection** — if your terminal is the frontmost app, notifications are suppressed by design. `agent-notify status` and `agent-notify doctor` now show which terminal was detected and why. If auto-detection is wrong on your machine, set `"terminalApp"` explicitly in config.
 
 ### Windows toast notifications
 
