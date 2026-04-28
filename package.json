@@ -1,5 +1,6 @@
 {
   "name": "agent-notify-workspace",
+  "version": "0.1.50",
   "private": true,
   "workspaces": [
     "packages/core",
@@ -7,6 +8,7 @@
     "cli"
   ],
   "scripts": {
+    "sync:version": "node scripts/sync-version.mjs",
     "build:macos-helper": "node scripts/build-macos-helper.mjs",
     "build": "bun run build:macos-helper && bun run --filter @agent-notify/core build && bun run --filter opencode-agent-notify build && bun run --filter agent-notify-cli build",
     "build:binary": "bun run build && bun build cli/src/index.ts --compile --outfile dist/agent-notify --target bun",

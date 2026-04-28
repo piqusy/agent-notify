@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises"
 import { join } from "node:path"
 
 const root = join(process.cwd())
+const workspacePackagePath = ["package.json"]
 const packagePaths = [
   ["cli", "package.json"],
   ["packages", "core", "package.json"],
@@ -26,14 +27,15 @@ async function readCliVersion(): Promise<string> {
 }
 
 describe("workspace versions", () => {
-  it("keeps all package versions aligned", async () => {
+  it("keeps all package versions aligned with the root workspace version", async () => {
+    const workspaceVersion = await readVersion(workspacePackagePath)
     const versions = await Promise.all(packagePaths.map(readVersion))
-    expect(new Set(versions).size).toBe(1)
+    expect(versions.every((version) => version === workspaceVersion)).toBe(true)
   })
 
-  it("keeps cli version aligned with packages", async () => {
-    const versions = await Promise.all(packagePaths.map(readVersion))
+  it("keeps cli version aligned with the root workspace version", async () => {
+    const workspaceVersion = await readVersion(workspacePackagePath)
     const cliVersion = await readCliVersion()
-    expect(cliVersion).toBe(versions[0])
+    expect(cliVersion).toBe(workspaceVersion)
   })
 })

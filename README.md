@@ -232,9 +232,12 @@ If `~/.config/agent-notify/config.json` contains invalid JSON or bad values, `ag
 
 ```sh
 bun install
+bun run sync:version
 bun run build
 bun run test
 ```
+
+`package.json` at the workspace root is now the canonical version source. Run `bun run sync:version` after changing it to update the workspace package versions and generated CLI version constant.
 
 For OpenCode specifically, rerun `./install.sh` after building so `~/.config/opencode/opencode.json` points at local plugin path, then start fresh OpenCode session and trigger `session.idle` or `permission.asked`.
 

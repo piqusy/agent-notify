@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.50] — 2026-04-28
+
+### Added
+- CI now runs on both `ubuntu-latest` and `macos-latest`, so the macOS helper build path is exercised on every push and pull request instead of only during release builds
+
+### Changed
+- The workspace root `package.json` is now the canonical version source, with `bun run sync:version` updating all package versions and the generated CLI version constant from one place
+
 ## [0.1.49] — 2026-04-28
 
 ### Added

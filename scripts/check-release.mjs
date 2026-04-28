@@ -11,6 +11,21 @@ const packageFiles = [
   "packages/claude-code/package.json",
 ]
 
+function readWorkspaceVersion() {
+  const root = readJson("package.json")
+  const version = root.version
+
+  if (!version) {
+    fail("Root package.json is missing a version field")
+  }
+
+  if (!/^\d+\.\d+\.\d+$/.test(version)) {
+    fail(`Root package version must match MAJOR.MINOR.PATCH: ${version}`)
+  }
+
+  return version
+}
+
 function fail(message) {
   console.error(message)
   process.exit(1)
@@ -78,24 +93,21 @@ function ensureFormulaTemplatePlaceholders() {
   }
 }
 
+const version = readWorkspaceVersion()
+
 const packageVersions = packageFiles.map((file) => ({
   file,
   version: readJson(file).version,
 }))
 
-const uniquePackageVersions = [...new Set(packageVersions.map(({ version }) => version))]
-if (uniquePackageVersions.length !== 1) {
-  fail(`Package versions do not match: ${packageVersions.map(({ file, version }) => `${file}=${version}`).join(", ")}`)
-}
-
-const version = uniquePackageVersions[0]
-if (!/^\d+\.\d+\.\d+$/.test(version)) {
-  fail(`Package version must match MAJOR.MINOR.PATCH: ${version}`)
+const mismatchedPackages = packageVersions.filter(({ version: packageVersion }) => packageVersion !== version)
+if (mismatchedPackages.length > 0) {
+  fail(`Package versions do not match root package.json (${version}): ${mismatchedPackages.map(({ file, version: packageVersion }) => `${file}=${packageVersion}`).join(", ")}`)
 }
 
 const cliVersion = readCliVersion()
 if (cliVersion !== version) {
-  fail(`cli/src/version.ts (${cliVersion}) does not match package versions (${version})`)
+  fail(`cli/src/version.ts (${cliVersion}) does not match root package.json (${version})`)
 }
 
 const releaseTag = process.env.RELEASE_TAG?.trim()
