@@ -1,4 +1,5 @@
 export type NotifyState = "done" | "question"
+export type NotifyTrigger = NotifyState | "permission"
 
 export type NotifyBackend = "macos-helper" | "osascript" | "notify-send" | "powershell"
 
@@ -71,7 +72,7 @@ export interface NotifyPayload {
 
 export interface NotifyInput {
   state:            NotifyState
-  trigger?:         "done" | "question" | "permission"  // if omitted, falls back to state
+  trigger?:         NotifyTrigger  // if omitted, falls back to state
   tool:             string
   cwd?:             string
   skipFocusCheck?:  boolean   // when true, bypasses the terminal-focused suppression

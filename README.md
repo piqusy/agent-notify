@@ -13,7 +13,7 @@ AI agents can take minutes on complex tasks. Instead of watching the terminal, y
 - Native macOS notifications via a bundled helper app
 - Basic Linux support via `notify-send`
 - Basic Windows support via PowerShell / BurntToast fallback
-- Three event types: **done**, **question**, **permission request**
+- Three event types: **done**, **question**, and **permission**
 - Compact context rows in the notification body for the current tab/project and Git branch
 - Configurable sound per event (with live preview in the setup wizard)
 - Bundled Agent Notify app icon on macOS
@@ -83,7 +83,9 @@ Config is saved to `~/.config/agent-notify/config.json`.
 ```sh
 agent-notify done                              # send a "done" notification
 agent-notify question                          # send a "question" notification
+agent-notify permission                        # send a "permission request" notification
 agent-notify test done                         # send a test notification
+agent-notify test permission                   # send a permission test notification
 agent-notify sounds            # list available sounds
 agent-notify sounds --play Morse
 agent-notify init              # re-run setup wizard
@@ -118,7 +120,7 @@ Hooks are configured in `~/.claude/settings.json`, and the hook scripts are copi
 |------|-------|
 | `Stop` | Agent finished — sends **done** notification |
 | `Notification` | Agent waiting for input — sends **question** notification |
-| `PermissionRequest` | Agent needs permission — sends **question** notification |
+| `PermissionRequest` | Agent needs permission — sends **permission** notification |
 
 ## OpenCode
 
@@ -129,6 +131,11 @@ agent-notify install opencode
 ```
 
 This copies the plugin into `~/.config/opencode/plugins/opencode-agent-notify/` and updates `~/.config/opencode/opencode.json`. It listens to `session.idle`, `session.error`, and `permission.asked` events.
+
+It emits:
+
+- **done** for `session.idle` and `session.error`
+- **permission** for `permission.asked`
 
 ## Pi
 

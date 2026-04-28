@@ -93,6 +93,7 @@ describe("notify integration (skip in CI — uses real config/fs)", () => {
   })
 
   it("uses friendly display names for supported tools", async () => {
+    vi.spyOn(zellij, "isZellijSession").mockReturnValue(false)
     const sendNotification = vi.spyOn(platform, "sendNotification").mockResolvedValue(undefined)
 
     await notify({ state: "done", tool: "pi-coding-agent", cwd: process.cwd() })
@@ -101,6 +102,42 @@ describe("notify integration (skip in CI — uses real config/fs)", () => {
       expect.objectContaining({ title: "Pi — Done" }),
       expect.anything(),
     )
+  })
+
+  it("uses a distinct Permission title when trigger=permission", async () => {
+    vi.spyOn(zellij, "isZellijSession").mockReturnValue(false)
+    const sendNotification = vi.spyOn(platform, "sendNotification").mockResolvedValue(undefined)
+
+    await notify({ state: "question", trigger: "permission", tool: "claude-code", cwd: process.cwd() })
+
+    expect(sendNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Claude Code — Permission" }),
+      expect.anything(),
+    )
+  })
+
+  it("checks the permission event toggle instead of question when trigger=permission", async () => {
+    vi.spyOn(zellij, "isZellijSession").mockReturnValue(false)
+    const { loadConfig } = await import("../config.js")
+    vi.mocked(loadConfig).mockResolvedValueOnce({
+      events: { done: true, question: true, permission: false },
+      terminalApp: null,
+      clickRestore: { enabled: false },
+      cooldownSeconds: 0,
+      quietHours: null,
+      sounds: { done: null, question: null, permission: null },
+      backend: null,
+      zellij: {
+        tabIndicator: { enabled: true, prefix: " ● " },
+        paneIndicator: { enabled: false, mode: "background", bg: "#3c3836", clearOn: "origin-pane-focus" },
+      },
+    })
+
+    const sendNotification = vi.spyOn(platform, "sendNotification").mockResolvedValue(undefined)
+    const result = await notify({ state: "question", trigger: "permission", tool: "opencode", cwd: process.cwd() })
+
+    expect(result).toEqual({ sent: false, reason: "event-disabled" })
+    expect(sendNotification).not.toHaveBeenCalled()
   })
 
   it("attaches click restore metadata when enabled in config", async () => {

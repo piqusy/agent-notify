@@ -12,6 +12,8 @@ agent-notify install claude-code
 
 This installs the hook scripts into `~/.claude/hooks/agent-notify/` and updates `~/.claude/settings.json`.
 
+The `PermissionRequest` hook sends a distinct `permission` notification, so you can configure its sound and enablement separately from normal `question` notifications.
+
 Manual wiring is also possible. Add these hooks to your Claude Code settings (`.claude/settings.json`):
 
 ```json
@@ -54,9 +56,6 @@ Manual wiring is also possible. Add these hooks to your Claude Code settings (`.
 }
 ```
 
-Make sure `agent-notify` CLI is in your PATH:
-```bash
-npm install -g agent-notify-cli
-```
+Make sure the `agent-notify` CLI is in your PATH.
 
-Or use the full path to the built CLI binary.
+If you installed via Homebrew, this is automatic. If you built from source, use the linked CLI from `install.sh` or the full path to the built CLI binary.

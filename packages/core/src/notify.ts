@@ -1,6 +1,6 @@
 import { execSync } from "node:child_process"
 import * as path from "node:path"
-import type { Config, NotifyPayload, NotifyResult, QuietHours } from "./types.js"
+import type { Config, NotifyPayload, NotifyResult, QuietHours, NotifyTrigger } from "./types.js"
 import type { NotifyInput } from "./types.js"
 import { loadConfig } from "./config.js"
 import { checkAndUpdateCooldown, cooldownFilePath } from "./cooldown.js"
@@ -101,10 +101,15 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
     "pi-coding-agent": "Pi",
     test: "Test",
   }
+  const EVENT_LABELS: Record<NotifyTrigger, string> = {
+    done: "Done",
+    question: "Question",
+    permission: "Permission",
+  }
   const displayName = TOOL_DISPLAY_NAMES[input.tool]
     ?? input.tool.charAt(0).toUpperCase() + input.tool.slice(1)
-  const stateLabel = input.state === "done" ? "Done" : "Question"
-  const title = `${displayName} — ${stateLabel}`
+  const eventLabel = EVENT_LABELS[input.trigger ?? input.state]
+  const title = `${displayName} — ${eventLabel}`
   const body = [
     `▣  ${tabName}`,
     `⎇  ${branch ?? "—"}`,

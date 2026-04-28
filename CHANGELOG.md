@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.47] — 2026-04-28
+
+### Added
+- First-class `permission` notifications in the CLI via `agent-notify permission`, including distinct Permission titles and test-mode support
+
+### Changed
+- Claude Code `PermissionRequest` hooks now emit `permission` notifications instead of reusing `question`
+
 ## [0.1.46] — 2026-04-28
 
 ### Added
