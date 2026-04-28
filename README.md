@@ -2,13 +2,17 @@
 
 Desktop notifications for AI coding agents — get notified when [Claude Code](https://claude.ai/code), [OpenCode](https://opencode.ai), or [Pi](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) finishes a task or needs your attention.
 
+`agent-notify` is **macOS-first**, with **basic notification support on Linux and Windows**.
+
 ## Why
 
-AI agents can take minutes on complex tasks. Instead of watching the terminal, you get a native macOS notification the moment your attention is needed — with a distinct sound per event type and smart suppression when you're already at the keyboard.
+AI agents can take minutes on complex tasks. Instead of watching the terminal, you get a desktop notification the moment your attention is needed — with a distinct sound per event type and smart suppression when you're already at the keyboard. On macOS, this uses a bundled native helper for the best experience.
 
 ## Features
 
 - Native macOS notifications via a bundled helper app
+- Basic Linux support via `notify-send`
+- Basic Windows support via PowerShell / BurntToast fallback
 - Three event types: **done**, **question**, **permission request**
 - Compact context rows in the notification body for the current tab/project and Git branch
 - Configurable sound per event (with live preview in the setup wizard)
@@ -19,6 +23,12 @@ AI agents can take minutes on complex tasks. Instead of watching the terminal, y
 - Optional macOS click-to-restore for the terminal app and Zellij tab
 - Works with Claude Code and OpenCode out of the box
 - Supports Pi via a tiny auto-discovered extension
+
+## Platform support
+
+- **macOS** — full feature set: native helper, app icon, sounds, and optional click-to-restore
+- **Linux** — basic notifications only via `notify-send`
+- **Windows** — basic notifications only via PowerShell / BurntToast
 
 ## Install
 
@@ -178,9 +188,10 @@ agent-notify uninstall pi
 
 ## Requirements
 
-- macOS
 - [bun](https://bun.sh) (for source install only — Homebrew install is standalone)
-- Xcode Command Line Tools / Swift (for source install on macOS so the helper app can be built)
+- **macOS (source install):** Xcode Command Line Tools / Swift so the native helper app can be built
+- **Linux:** `notify-send` available on `PATH`
+- **Windows:** PowerShell available; BurntToast recommended for native toast notifications
 
 ## Troubleshooting
 
@@ -207,8 +218,10 @@ For Pi specifically, rerun `./install.sh` after editing `packages/pi-coding-agen
 ### No notifications appear
 
 - **macOS notification permissions** — the most common issue. Open **System Settings → Notifications → Agent Notify** and enable **Allow Notifications**. Set the alert style to **Banners** or **Alerts**.
-- **Native helper missing** — if you installed from source on macOS, rerun `bun run build` and make sure the helper app was built successfully.
-- **Fallback backend** — if the helper app is unavailable, agent-notify can fall back to `osascript`, but the bundled helper is the supported macOS path.
+- **macOS native helper missing** — if you installed from source on macOS, rerun `bun run build` and make sure the helper app was built successfully.
+- **Linux backend** — make sure `notify-send` is installed and available on `PATH`.
+- **Windows backend** — make sure PowerShell is available. BurntToast is preferred; without it, agent-notify falls back to a message box.
+- **Fallback backend** — if the macOS helper app is unavailable, agent-notify can fall back to `osascript`, but the bundled helper is the supported macOS path.
 - **Focus detection** — if your terminal is the frontmost app, notifications are suppressed by design. Switch to another app or set `"terminalApp": null` in config to disable focus detection entirely.
 
 ### No sound
@@ -217,6 +230,7 @@ For Pi specifically, rerun `./install.sh` after editing `packages/pi-coding-agen
 - Check that your system volume is not muted.
 - Verify your sound config refers to a valid built-in name: `agent-notify sounds`.
 - During quiet hours, sounds are muted (notifications still appear silently).
+- Linux and Windows backends are more limited than macOS; sound behavior is currently macOS-first.
 
 ### macOS Sequoia / Tahoe
 
