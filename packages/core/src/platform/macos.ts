@@ -21,6 +21,14 @@ function helperArgs(payload: NotifyPayload): string[] {
     args.push("--sound", payload.sound);
   }
 
+  if (payload.clickTarget) {
+    args.push("--click-target", Buffer.from(JSON.stringify(payload.clickTarget), "utf8").toString("base64"));
+  }
+
+  if (payload.macosHelperKeepAliveSeconds && payload.macosHelperKeepAliveSeconds > 0) {
+    args.push("--keep-alive-seconds", String(payload.macosHelperKeepAliveSeconds));
+  }
+
   const debugLog = process.env.AGENT_NOTIFY_MACOS_HELPER_LOG;
   if (debugLog) {
     args.push("--log-file", debugLog);

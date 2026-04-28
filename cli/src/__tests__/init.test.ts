@@ -12,6 +12,7 @@ const mockState = vi.hoisted(() => ({
     events: { done: true, question: true, permission: true },
     terminalApp: null,
     backend: null,
+    clickRestore: { enabled: false },
     zellij: {
       tabIndicator: { enabled: true, prefix: " ● " },
       paneIndicator: { enabled: false, mode: "background", bg: "#3c3836", clearOn: "origin-pane-focus" },
@@ -124,6 +125,7 @@ describe("cmdInit", () => {
       events: { done: true, question: false, permission: true },
       terminalApp: "Warp Terminal",
       backend: "notify-send",
+      clickRestore: { enabled: true },
       zellij: {
         tabIndicator: { enabled: true, prefix: " ● " },
         paneIndicator: { enabled: true, mode: "background", bg: "#123456", clearOn: "origin-pane-focus" },
@@ -156,6 +158,7 @@ describe("cmdInit", () => {
       { name: "Permission (agent requesting permission)", value: "permission", checked: true },
     ])
     expect(mockState.inputConfigs.find((config) => config.message === "Cooldown between notifications (seconds)")?.default).toBe("17")
+    expect(mockState.confirmConfigs.find((config) => config.message === "Enable click-to-restore on macOS notifications?")?.default).toBe(true)
     expect(mockState.selectConfigs.find((config) => config.message === "Zellij visual indicators for background notifications")?.default).toBe("tab-and-pane")
     expect(mockState.selectConfigs.find((config) => config.message === "Pane tint color")?.default).toBe("__custom__")
     expect(mockState.inputConfigs.find((config) => config.message === "Pane background hex color")?.default).toBe("#123456")

@@ -45,8 +45,22 @@ function normalizeTabName(tabName: string, tabPrefix: string): string {
   return tabName.replace(/^\s*●\s*/, "").trim()
 }
 
+function envFlagEnabled(name: string): boolean {
+  const value = process.env[name]?.trim().toLowerCase()
+  return value === "1" || value === "true" || value === "yes" || value === "on"
+}
+
+function parsePositiveIntEnv(name: string): number | undefined {
+  const value = process.env[name]?.trim()
+  if (!value) return undefined
+
+  const parsed = Number.parseInt(value, 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
+}
+
 export async function notify(input: NotifyInput): Promise<NotifyResult> {
   const config: Config = await loadConfig()
+  const terminalApp = config.terminalApp ?? resolveTerminalApp(process.env.TERM_PROGRAM ?? "")
 
   // 1. Event filter — use trigger if provided, otherwise fall back to state
   const eventKey = input.trigger ?? input.state
@@ -54,8 +68,7 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
 
   // 2. Focus check — auto-detect terminal when terminalApp is null
   if (!input.skipFocusCheck && !input.force) {
-    const termApp = config.terminalApp ?? resolveTerminalApp(process.env.TERM_PROGRAM ?? "")
-    if (termApp !== null && await isTerminalFocused(termApp)) {
+    if (terminalApp !== null && await isTerminalFocused(terminalApp)) {
       if (isZellijSession()) {
         // Inside Zellij: only suppress if our tab is the active (visible) one
         if (await isPaneTabActive()) return { sent: false, reason: "terminal-focused" }
@@ -108,10 +121,25 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
         return resolveSound(soundKey) ?? undefined
       })()
 
+  const clickRestoreEnabled = config.clickRestore.enabled || envFlagEnabled("AGENT_NOTIFY_CLICK_SPIKE")
   const payload: NotifyPayload = {
     title,
     body,
     ...(sound ? { sound } : {}),
+    ...(clickRestoreEnabled ? {
+      clickTarget: {
+        issuedAt: Math.floor(Date.now() / 1000),
+        ...(terminalApp !== null ? { terminalApp } : {}),
+        ...(tabInfo || process.env.ZELLIJ_SESSION_NAME ? {
+          zellij: {
+            sessionName: process.env.ZELLIJ_SESSION_NAME ?? null,
+            tabId: tabInfo?.tabId ?? null,
+            tabName,
+          },
+        } : {}),
+      },
+      macosHelperKeepAliveSeconds: parsePositiveIntEnv("AGENT_NOTIFY_CLICK_SPIKE_KEEP_ALIVE_SECONDS") ?? 120,
+    } : {}),
   }
 
   // 6. Zellij tab/pane indicators — mark the background tab before macOS notification shows

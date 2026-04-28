@@ -4,6 +4,7 @@ vi.mock("../config.js", () => ({
   loadConfig: vi.fn(async () => ({
     events: { done: true, question: true, permission: true },
     terminalApp: null,
+    clickRestore: { enabled: false },
     cooldownSeconds: 0,
     quietHours: null,
     sounds: { done: null, question: null, permission: null },
@@ -66,6 +67,8 @@ describe("isQuietHour", () => {
 
 describe("notify integration (skip in CI — uses real config/fs)", () => {
   afterEach(() => {
+    delete process.env.AGENT_NOTIFY_CLICK_SPIKE
+    delete process.env.AGENT_NOTIFY_CLICK_SPIKE_KEEP_ALIVE_SECONDS
     vi.restoreAllMocks()
   })
 
@@ -96,6 +99,47 @@ describe("notify integration (skip in CI — uses real config/fs)", () => {
 
     expect(sendNotification).toHaveBeenCalledWith(
       expect.objectContaining({ title: "Pi — Done" }),
+      expect.anything(),
+    )
+  })
+
+  it("attaches click restore metadata when enabled in config", async () => {
+    process.env.AGENT_NOTIFY_CLICK_SPIKE_KEEP_ALIVE_SECONDS = "45"
+
+    const { loadConfig } = await import("../config.js")
+    vi.mocked(loadConfig).mockResolvedValueOnce({
+      events: { done: true, question: true, permission: true },
+      terminalApp: null,
+      clickRestore: { enabled: true },
+      cooldownSeconds: 0,
+      quietHours: null,
+      sounds: { done: null, question: null, permission: null },
+      backend: null,
+      zellij: {
+        tabIndicator: { enabled: true, prefix: " ● " },
+        paneIndicator: { enabled: false, mode: "background", bg: "#3c3836", clearOn: "origin-pane-focus" },
+      },
+    })
+
+    vi.spyOn(zellij, "isZellijSession").mockReturnValue(true)
+    vi.spyOn(zellij, "isPaneTabActive").mockResolvedValue(false)
+    vi.spyOn(zellij, "getCurrentTabInfo").mockResolvedValue({ tabId: 12, tabName: " ● api" })
+    vi.spyOn(zellij, "markTabNotified").mockImplementation(() => undefined)
+    const sendNotification = vi.spyOn(platform, "sendNotification").mockResolvedValue(undefined)
+
+    await notify({ state: "done", tool: "test", cwd: "/tmp/project" })
+
+    expect(sendNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clickTarget: expect.objectContaining({
+          issuedAt: expect.any(Number),
+          zellij: expect.objectContaining({
+            tabId: 12,
+            tabName: "api",
+          }),
+        }),
+        macosHelperKeepAliveSeconds: 45,
+      }),
       expect.anything(),
     )
   })

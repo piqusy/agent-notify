@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.46] — 2026-04-28
+
+### Added
+- Optional macOS click-to-restore for native helper notifications, with terminal foregrounding and Zellij tab/session restore when clicking a notification
+- `clickRestore.enabled` in config plus a setup-wizard toggle to enable or disable click-to-restore explicitly
+
+### Fixed
+- Harden macOS click-to-restore by trusting only fixed absolute `zellij` locations, rejecting stale notification clicks older than five minutes, and reducing sensitive click payload/logging data
+
 ## [0.1.45] — 2026-04-27
 
 ### Fixed

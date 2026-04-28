@@ -22,6 +22,7 @@ describe("loadConfig", () => {
     const tmp = join(tmpdir(), "agent-notify-nested-config.json")
     await writeFile(tmp, JSON.stringify({
       sounds: { done: "Ping" },
+      clickRestore: { enabled: true },
       zellij: {
         paneIndicator: {
           enabled: true,
@@ -33,6 +34,7 @@ describe("loadConfig", () => {
 
     expect(cfg.sounds.done).toBe("Ping")
     expect(cfg.sounds.question).toBe(defaultConfig.sounds.question)
+    expect(cfg.clickRestore.enabled).toBe(true)
     expect(cfg.zellij.tabIndicator).toEqual(defaultConfig.zellij.tabIndicator)
     expect(cfg.zellij.paneIndicator.enabled).toBe(true)
     expect(cfg.zellij.paneIndicator.bg).toBe("#282828")

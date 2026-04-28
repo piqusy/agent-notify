@@ -16,6 +16,7 @@ AI agents can take minutes on complex tasks. Instead of watching the terminal, y
 - Quiet hours
 - Cooldown to avoid notification spam
 - Focus detection — skips notification if your terminal is already in focus
+- Optional macOS click-to-restore for the terminal app and Zellij tab
 - Works with Claude Code and OpenCode out of the box
 - Supports Pi via a tiny auto-discovered extension
 
@@ -63,7 +64,7 @@ Run the interactive wizard:
 agent-notify init
 ```
 
-This walks you through backend selection, terminal app focus detection, quiet hours, sound selection (with live preview), and event selection.
+This walks you through backend selection, terminal app focus detection, quiet hours, sound selection (with live preview), event selection, and optional macOS click-to-restore.
 
 Config is saved to `~/.config/agent-notify/config.json`.
 
@@ -162,12 +163,16 @@ agent-notify uninstall pi
     "permission": true
   },
   "terminalApp": null,
-  "backend": null
+  "backend": null,
+  "clickRestore": {
+    "enabled": false
+  }
 }
 ```
 
 `terminalApp: null` — auto-detected via `$TERM_PROGRAM`. Set to e.g. `"iTerm2"` to override.  
 `backend: null` — auto-detected. On modern macOS this prefers the bundled native helper app, then falls back to `osascript` only if the helper is unavailable.  
+`clickRestore.enabled: true` — on macOS helper notifications, clicking the notification restores the terminal app and attempts to switch to the originating Zellij tab.  
 `sounds.permission: null` — falls back to the question sound.  
 `quietHours: null` — disables quiet hours entirely (sounds play at all times).
 
@@ -215,7 +220,7 @@ For Pi specifically, rerun `./install.sh` after editing `packages/pi-coding-agen
 
 ### macOS Sequoia / Tahoe
 
-On modern macOS, agent-notify uses its bundled native helper app by default. This is the supported path for reliable notifications and the branded Agent Notify app icon.
+On modern macOS, agent-notify uses its bundled native helper app by default. This is the supported path for reliable notifications, the branded Agent Notify app icon, and click-to-restore when enabled.
 
 ### "Sent test notification" but nothing appeared
 

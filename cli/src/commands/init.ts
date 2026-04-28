@@ -227,6 +227,15 @@ export async function cmdInit(options: CmdInitOptions = {}): Promise<void> {
     },
   }))
 
+  let clickRestore = existingConfig.clickRestore
+  if (process.platform === "darwin") {
+    const enabled = await ask(confirm({
+      message: "Enable click-to-restore on macOS notifications?",
+      default: existingConfig.clickRestore.enabled,
+    }))
+    clickRestore = { enabled }
+  }
+
   let zellij = existingConfig.zellij
   if (shouldAskForZellijConfig(existingConfig)) {
     const zellijMode = await ask(selectWithPreview<(typeof ZELLIJ_MODE_CHOICES)[number]["value"]>({
@@ -303,6 +312,7 @@ export async function cmdInit(options: CmdInitOptions = {}): Promise<void> {
     },
     terminalApp,
     backend,
+    clickRestore,
     zellij,
   }
 
@@ -319,6 +329,9 @@ export async function cmdInit(options: CmdInitOptions = {}): Promise<void> {
   }
   if (process.platform === "darwin") {
     hints.push("  macOS uses the bundled native helper app icon")
+    if (config.clickRestore.enabled) {
+      hints.push("  clickRestore.enabled: true → clicking macOS notifications can restore your terminal and Zellij tab")
+    }
   }
   if (hints.length > 0) console.log(hints.join("\n"))
 

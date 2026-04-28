@@ -12,6 +12,7 @@ vi.mock("../config.js", () => ({
   loadConfig: vi.fn(async () => ({
     events: { done: true, question: true, permission: true },
     terminalApp: null,
+    clickRestore: { enabled: false },
     cooldownSeconds: 0,
     quietHours: null,
     sounds: { done: null, question: null, permission: null },

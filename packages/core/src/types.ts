@@ -36,6 +36,10 @@ export interface ZellijConfig {
   paneIndicator: ZellijPaneIndicatorConfig
 }
 
+export interface ClickRestoreConfig {
+  enabled: boolean
+}
+
 export interface Config {
   cooldownSeconds: number
   quietHours:      QuietHours | null   // null = quiet hours disabled entirely
@@ -43,13 +47,26 @@ export interface Config {
   events:          EventFilter
   terminalApp:     string | null   // null = auto-detect via TERM_PROGRAM
   backend:         NotifyBackend | null   // null = auto-detect
+  clickRestore:    ClickRestoreConfig
   zellij:          ZellijConfig
+}
+
+export interface NotificationClickTarget {
+  issuedAt?: number
+  terminalApp?: string | null
+  zellij?: {
+    sessionName?: string | null
+    tabId?: number | null
+    tabName?: string | null
+  }
 }
 
 export interface NotifyPayload {
   title: string
   body:  string
   sound?: string
+  clickTarget?: NotificationClickTarget
+  macosHelperKeepAliveSeconds?: number
 }
 
 export interface NotifyInput {

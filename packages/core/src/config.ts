@@ -10,6 +10,7 @@ export const defaultConfig: Config = {
   events:          { done: true, question: true, permission: true },
   terminalApp:     null,
   backend:         null,
+  clickRestore:    { enabled: false },
   zellij: {
     tabIndicator: {
       enabled: true,
@@ -46,6 +47,10 @@ export async function loadConfig(path = defaultConfigPath): Promise<Config> {
       events: {
         ...defaultConfig.events,
         ...(parsed.events ?? {}),
+      },
+      clickRestore: {
+        ...defaultConfig.clickRestore,
+        ...(parsed.clickRestore ?? {}),
       },
       zellij: {
         ...defaultConfig.zellij,
