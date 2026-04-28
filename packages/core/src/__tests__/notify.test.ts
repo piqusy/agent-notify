@@ -74,6 +74,8 @@ describe("notify integration (skip in CI — uses real config/fs)", () => {
   afterEach(() => {
     delete process.env.AGENT_NOTIFY_CLICK_SPIKE
     delete process.env.AGENT_NOTIFY_CLICK_SPIKE_KEEP_ALIVE_SECONDS
+    delete process.env.KITTY_WINDOW_ID
+    delete process.env.KITTY_LISTEN_ON
     vi.restoreAllMocks()
   })
 
@@ -197,6 +199,9 @@ describe("notify integration (skip in CI — uses real config/fs)", () => {
   })
 
   it("attaches canonical terminal metadata to the click payload when known", async () => {
+    process.env.KITTY_WINDOW_ID = "23"
+    process.env.KITTY_LISTEN_ON = "unix:/tmp/kitty-test"
+
     const focus = await import("../focus.js")
     vi.mocked(focus.resolveTerminal).mockReturnValueOnce({
       id: "kitty",
@@ -239,6 +244,10 @@ describe("notify integration (skip in CI — uses real config/fs)", () => {
             id: "kitty",
             displayName: "kitty",
             bundleId: "net.kovidgoyal.kitty",
+            kitty: {
+              windowId: 23,
+              listenOn: "unix:/tmp/kitty-test",
+            },
           },
         }),
       }),

@@ -122,6 +122,60 @@ describe("sendNotification", () => {
     );
   });
 
+  it("passes kitty remote-control metadata to the macos helper when provided", () => {
+    sendMacOS(
+      {
+        title: "Test",
+        body: "body",
+        clickTarget: {
+          issuedAt: 1_777_324_000,
+          terminalApp: "kitty",
+          terminal: {
+            id: "kitty",
+            displayName: "kitty",
+            bundleId: "net.kovidgoyal.kitty",
+            kitty: {
+              windowId: 23,
+              listenOn: "unix:/tmp/kitty-test",
+            },
+          },
+        },
+      },
+      "macos-helper",
+      { helperAppPath: "/tmp/AgentNotify.app" },
+    );
+
+    const encodedTarget = Buffer.from(JSON.stringify({
+      issuedAt: 1_777_324_000,
+      terminalApp: "kitty",
+      terminal: {
+        id: "kitty",
+        displayName: "kitty",
+        bundleId: "net.kovidgoyal.kitty",
+        kitty: {
+          windowId: 23,
+          listenOn: "unix:/tmp/kitty-test",
+        },
+      },
+    }), "utf8").toString("base64");
+
+    expect(cp.spawnSync).toHaveBeenCalledWith(
+      "open",
+      [
+        "-n",
+        "/tmp/AgentNotify.app",
+        "--args",
+        "--title",
+        "Test",
+        "--body",
+        "body",
+        "--click-target",
+        encodedTarget,
+      ],
+      { stdio: "ignore" }
+    );
+  });
+
   it("uses plain notify-send on linux", () => {
     sendLinux({ title: "Test", body: "body" });
 

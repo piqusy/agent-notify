@@ -1,2 +1,2 @@
 // Generated from the workspace root package.json by `bun run sync:version`.
-export const CLI_VERSION = "0.2.4"
+export const CLI_VERSION = "0.2.5"

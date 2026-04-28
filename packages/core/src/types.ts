@@ -52,10 +52,16 @@ export interface Config {
   zellij:          ZellijConfig
 }
 
+export interface KittyClickTarget {
+  windowId?: number | null
+  listenOn?: string | null
+}
+
 export interface NotificationClickTerminalTarget {
   id?: string | null
   displayName?: string | null
   bundleId?: string | null
+  kitty?: KittyClickTarget
 }
 
 export interface NotificationClickTarget {

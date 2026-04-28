@@ -209,7 +209,7 @@ agent-notify uninstall pi
 
 `terminalApp: null` — auto-detected from terminal-specific env markers, `$TERM_PROGRAM`, and on macOS a parent-process fallback. This now covers common setups for iTerm2, Terminal, Warp, kitty, WezTerm, Hyper, Ghostty, Alacritty, VS Code, GNOME Terminal, Konsole, foot, Rio, and Tabby. Set it explicitly to e.g. `"iTerm2"` to override.
 `backend: null` — auto-detected. On modern macOS this prefers the bundled native helper app, then falls back to `osascript` only if the helper is unavailable.  
-`clickRestore.enabled: true` — on macOS helper notifications, clicking the notification restores the terminal app and attempts to switch to the originating Zellij tab.  
+`clickRestore.enabled: true` — on macOS helper notifications, clicking the notification restores the terminal app, attempts to switch to the originating Zellij tab, and for kitty will also try to focus the originating kitty window when remote-control metadata is available.  
 `sounds.permission: null` — falls back to the question sound.  
 `quietHours: null` — disables quiet hours entirely (sounds play at all times).
 
@@ -293,7 +293,7 @@ Without BurntToast, agent-notify falls back to a simple message box. That fallba
 
 ### macOS Sequoia / Tahoe
 
-On modern macOS, agent-notify uses its bundled native helper app by default. This is the supported path for reliable notifications, the branded Agent Notify app icon, and click-to-restore when enabled.
+On modern macOS, agent-notify uses its bundled native helper app by default. This is the supported path for reliable notifications, the branded Agent Notify app icon, and click-to-restore when enabled. For kitty, exact window/tab restore is best-effort and depends on kitty remote control being addressable (for example via `KITTY_LISTEN_ON` / `listen_on`).
 
 ### "Sent test notification" but nothing appeared
 

@@ -126,10 +126,16 @@ struct ZellijClickTarget: Decodable {
   let tabName: String?
 }
 
+struct KittyClickTarget: Decodable {
+  let windowId: Int?
+  let listenOn: String?
+}
+
 struct TerminalClickTarget: Decodable {
   let id: String?
   let displayName: String?
   let bundleId: String?
+  let kitty: KittyClickTarget?
 }
 
 struct NotificationClickTarget: Decodable {
@@ -193,6 +199,24 @@ func resolveZellijCommand(logger: Logger) -> (executable: String, prefixArgs: [S
   }
 
   logger.log("zellij_command=missing")
+  return nil
+}
+
+func resolveKittyCommand(logger: Logger) -> String? {
+  let fileManager = FileManager.default
+  let candidates = [
+    "/opt/homebrew/bin/kitty",
+    "/usr/local/bin/kitty",
+    "/Applications/kitty.app/Contents/MacOS/kitty",
+    "/usr/bin/kitty",
+  ]
+
+  for candidate in candidates where fileManager.isExecutableFile(atPath: candidate) {
+    logger.log("kitty_command=resolved path=\(candidate)")
+    return candidate
+  }
+
+  logger.log("kitty_command=missing")
   return nil
 }
 
@@ -335,6 +359,38 @@ func activateApplication(bundleIdentifier: String?, appName: String?, logger: Lo
   }
 
   logger.log("activate_app=failure")
+  return false
+}
+
+@discardableResult
+func restoreKitty(target: KittyClickTarget, logger: Logger) -> Bool {
+  guard let command = resolveKittyCommand(logger: logger) else {
+    logger.log("restore_kitty=skipped reason=missing-command")
+    return false
+  }
+
+  guard let windowId = target.windowId else {
+    logger.log("restore_kitty=skipped reason=missing-window-id")
+    return false
+  }
+
+  let listenOn = target.listenOn?.trimmingCharacters(in: .whitespacesAndNewlines)
+  guard let listenOn, !listenOn.isEmpty else {
+    logger.log("restore_kitty=skipped reason=missing-listen-on")
+    return false
+  }
+
+  if runProcess(
+    executable: command,
+    arguments: ["@", "--to", listenOn, "focus-window", "--match", "id:\(windowId)"],
+    logger: logger,
+    label: "kitty_focus_window"
+  ) {
+    logger.log("restore_kitty=success method=window-id")
+    return true
+  }
+
+  logger.log("restore_kitty=failure")
   return false
 }
 
@@ -498,6 +554,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
       if let decoded {
         guard isFreshClickTarget(decoded, logger: logger) else {
           logger.log("restore_zellij=skipped reason=stale-click-target")
+          logger.log("restore_kitty=skipped reason=stale-click-target")
           logger.log("activate_app=skipped reason=stale-click-target")
           completionHandler()
           quitSoon(after: 0.2)
@@ -510,6 +567,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
           logger.log("restore_zellij=skipped reason=missing-zellij-target")
         }
 
+        if let kittyTarget = decoded.terminal?.kitty {
+          _ = restoreKitty(target: kittyTarget, logger: logger)
+        } else {
+          logger.log("restore_kitty=skipped reason=missing-kitty-target")
+        }
+
         let terminalName = decoded.terminal?.displayName ?? decoded.terminalApp
         let bundleId = decoded.terminal?.bundleId
         if (bundleId?.isEmpty == false) || (terminalName?.isEmpty == false) {
@@ -519,10 +582,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
       } else {
         logger.log("restore_zellij=skipped reason=invalid-click-target-json")
+        logger.log("restore_kitty=skipped reason=invalid-click-target-json")
         logger.log("activate_app=skipped reason=invalid-click-target-json")
       }
     } else {
       logger.log("restore_zellij=skipped reason=missing-click-target")
+      logger.log("restore_kitty=skipped reason=missing-click-target")
       logger.log("activate_app=skipped reason=missing-click-target")
     }
     completionHandler()

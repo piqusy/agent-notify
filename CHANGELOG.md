@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.5] — 2026-04-28
+
+### Added
+- Kitty click-to-restore payloads now carry best-effort Kitty remote-control metadata (`KITTY_WINDOW_ID`, `KITTY_LISTEN_ON`) when available, so the macOS helper can target the originating Kitty window
+
+### Changed
+- The macOS helper now attempts Kitty-specific window restore before generic app activation, while keeping the existing Zellij restore path for Kitty + Zellij sessions
+- README now documents that exact Kitty restore is best-effort and depends on Kitty remote control being addressable
+
 ## [0.2.4] — 2026-04-28
 
 ### Changed

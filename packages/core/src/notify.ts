@@ -58,6 +58,18 @@ function parsePositiveIntEnv(name: string): number | undefined {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
 }
 
+function buildKittyClickTarget(): { windowId?: number; listenOn?: string } | undefined {
+  const windowId = parsePositiveIntEnv("KITTY_WINDOW_ID")
+  const listenOn = process.env.KITTY_LISTEN_ON?.trim()
+
+  if (windowId === undefined && !listenOn) return undefined
+
+  return {
+    ...(windowId !== undefined ? { windowId } : {}),
+    ...(listenOn ? { listenOn } : {}),
+  }
+}
+
 const warnedConfigPaths = new Set<string>()
 
 function warnOnInvalidConfig(path: string, summary: string): void {
@@ -160,6 +172,11 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
             ...(resolvedTerminal.id !== null ? { id: resolvedTerminal.id } : {}),
             displayName: resolvedTerminal.displayName,
             ...(resolvedTerminal.bundleId !== null ? { bundleId: resolvedTerminal.bundleId } : {}),
+            ...(() => {
+              if (resolvedTerminal.id !== "kitty") return {}
+              const kitty = buildKittyClickTarget()
+              return kitty ? { kitty } : {}
+            })(),
           },
         } : {}),
         ...(tabInfo || process.env.ZELLIJ_SESSION_NAME ? {
