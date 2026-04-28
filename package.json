@@ -1,6 +1,6 @@
 {
   "name": "agent-notify-workspace",
-  "version": "0.1.50",
+  "version": "0.2.0",
   "private": true,
   "workspaces": [
     "packages/core",
@@ -12,8 +12,11 @@
     "build:macos-helper": "node scripts/build-macos-helper.mjs",
     "build": "bun run build:macos-helper && bun run --filter @agent-notify/core build && bun run --filter opencode-agent-notify build && bun run --filter agent-notify-cli build",
     "build:binary": "bun run build && bun build cli/src/index.ts --compile --outfile dist/agent-notify --target bun",
-    "build:binary:arm64": "bun run build && bun build cli/src/index.ts --compile --outfile dist/agent-notify-darwin-arm64 --target bun --target-arch arm64",
-    "build:binary:x64": "bun run build && bun build cli/src/index.ts --compile --outfile dist/agent-notify-darwin-x64 --target bun --target-arch x64",
+    "build:binary:darwin:arm64": "bun run build && bun build cli/src/index.ts --compile --outfile dist/agent-notify-darwin-arm64 --target bun-darwin-arm64",
+    "build:binary:darwin:x64": "bun run build && bun build cli/src/index.ts --compile --outfile dist/agent-notify-darwin-x64 --target bun-darwin-x64",
+    "build:binary:linux:arm64": "bun run build && bun build cli/src/index.ts --compile --outfile dist/agent-notify-linux-arm64 --target bun-linux-arm64",
+    "build:binary:linux:x64": "bun run build && bun build cli/src/index.ts --compile --outfile dist/agent-notify-linux-x64 --target bun-linux-x64",
+    "build:binary:windows:x64": "bun run build && bun build cli/src/index.ts --compile --outfile dist/agent-notify-windows-x64.exe --target bun-windows-x64",
     "check:release": "node scripts/check-release.mjs",
     "test": "vitest run",
     "typecheck": "bun run --filter @agent-notify/core build && bun run --workspaces typecheck"

@@ -24,20 +24,49 @@ concurrency:
 
 jobs:
   build:
-    name: Build (${{ matrix.arch }})
+    name: Build (${{ matrix.outfile }})
     runs-on: macos-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       contents: read
     strategy:
       matrix:
         include:
-          - arch: arm64
+          - platform: darwin
+            arch: arm64
             outfile: agent-notify-darwin-arm64
             bun_target: bun-darwin-arm64
-          - arch: x64
+            binary_name: agent-notify
+            sign_binary: true
+            stage_helper: true
+          - platform: darwin
+            arch: x64
             outfile: agent-notify-darwin-x64
             bun_target: bun-darwin-x64
+            binary_name: agent-notify
+            sign_binary: true
+            stage_helper: true
+          - platform: linux
+            arch: arm64
+            outfile: agent-notify-linux-arm64
+            bun_target: bun-linux-arm64
+            binary_name: agent-notify
+            sign_binary: false
+            stage_helper: false
+          - platform: linux
+            arch: x64
+            outfile: agent-notify-linux-x64
+            bun_target: bun-linux-x64
+            binary_name: agent-notify
+            sign_binary: false
+            stage_helper: false
+          - platform: windows
+            arch: x64
+            outfile: agent-notify-windows-x64
+            bun_target: bun-windows-x64
+            binary_name: agent-notify.exe
+            sign_binary: false
+            stage_helper: false
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -84,18 +113,19 @@ jobs:
         working-directory: release-src
         run: bun run build
 
-      - name: Compile standalone binary (${{ matrix.arch }})
+      - name: Compile standalone binary (${{ matrix.outfile }})
         working-directory: release-src
         run: |
           mkdir -p dist/${{ matrix.outfile }}/bin
           bun build cli/src/index.ts \
             --compile \
-            --outfile dist/${{ matrix.outfile }}/bin/agent-notify \
+            --outfile dist/${{ matrix.outfile }}/bin/${{ matrix.binary_name }} \
             --target ${{ matrix.bun_target }}
 
-      - name: Ad-hoc sign binary (${{ matrix.arch }})
+      - name: Ad-hoc sign binary (${{ matrix.outfile }})
+        if: ${{ matrix.sign_binary }}
         working-directory: release-src
-        run: codesign --sign - --force dist/${{ matrix.outfile }}/bin/agent-notify
+        run: codesign --sign - --force dist/${{ matrix.outfile }}/bin/${{ matrix.binary_name }}
 
       - name: Stage OpenCode plugin bundle (${{ matrix.arch }})
         working-directory: release-src
@@ -118,7 +148,8 @@ jobs:
           cp packages/pi-coding-agent/README.md dist/${{ matrix.outfile }}/pi-coding-agent/
           cp packages/pi-coding-agent/src/agent-notify.ts dist/${{ matrix.outfile }}/pi-coding-agent/
 
-      - name: Stage macOS helper app (${{ matrix.arch }})
+      - name: Stage macOS helper app (${{ matrix.outfile }})
+        if: ${{ matrix.stage_helper }}
         working-directory: release-src
         run: |
           mkdir -p dist/${{ matrix.outfile }}/agent-notify-helper
@@ -178,12 +209,20 @@ jobs:
         with:
           path: dist/
 
-      - name: Create tarballs
+      - name: Create release archives
         run: |
           cd dist
           tar -czf agent-notify-darwin-arm64.tar.gz agent-notify-darwin-arm64
           tar -czf agent-notify-darwin-x64.tar.gz agent-notify-darwin-x64
-          sha256sum agent-notify-darwin-arm64.tar.gz agent-notify-darwin-x64.tar.gz > checksums.txt
+          tar -czf agent-notify-linux-arm64.tar.gz agent-notify-linux-arm64
+          tar -czf agent-notify-linux-x64.tar.gz agent-notify-linux-x64
+          zip -qr agent-notify-windows-x64.zip agent-notify-windows-x64
+          sha256sum \
+            agent-notify-darwin-arm64.tar.gz \
+            agent-notify-darwin-x64.tar.gz \
+            agent-notify-linux-arm64.tar.gz \
+            agent-notify-linux-x64.tar.gz \
+            agent-notify-windows-x64.zip > checksums.txt
           cat checksums.txt
 
       - name: Normalize release version
@@ -195,7 +234,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cat > /tmp/release-notes.md <<EOF
-          ## Install via Homebrew
+          ## Install via Homebrew (macOS)
 
           Homebrew publishing runs in a separate workflow after this GitHub Release is created.
 
@@ -209,13 +248,24 @@ jobs:
           brew install piqusy/tap/agent-notify@${{ steps.version.outputs.no_v }}
           \`\`\`
 
-          Release tarballs and checksums are attached below.
+          ## Standalone binaries
+
+          Download the asset matching your OS/CPU from this release:
+
+          - macOS: `agent-notify-darwin-arm64.tar.gz`, `agent-notify-darwin-x64.tar.gz`
+          - Linux: `agent-notify-linux-arm64.tar.gz`, `agent-notify-linux-x64.tar.gz`
+          - Windows: `agent-notify-windows-x64.zip`
+
+          Release archives and checksums are attached below.
           EOF
 
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" \
               dist/agent-notify-darwin-arm64.tar.gz \
               dist/agent-notify-darwin-x64.tar.gz \
+              dist/agent-notify-linux-arm64.tar.gz \
+              dist/agent-notify-linux-x64.tar.gz \
+              dist/agent-notify-windows-x64.zip \
               dist/checksums.txt \
               --clobber
             gh release edit "$RELEASE_TAG" \
@@ -225,6 +275,9 @@ jobs:
             gh release create "$RELEASE_TAG" \
               dist/agent-notify-darwin-arm64.tar.gz \
               dist/agent-notify-darwin-x64.tar.gz \
+              dist/agent-notify-linux-arm64.tar.gz \
+              dist/agent-notify-linux-x64.tar.gz \
+              dist/agent-notify-windows-x64.zip \
               dist/checksums.txt \
               --title "$RELEASE_TAG" \
               --notes-file /tmp/release-notes.md

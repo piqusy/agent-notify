@@ -2,7 +2,7 @@
 
 Desktop notifications for AI coding agents — get notified when [Claude Code](https://claude.ai/code), [OpenCode](https://opencode.ai), or [Pi](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) finishes a task or needs your attention.
 
-`agent-notify` is **macOS-first**, with **basic notification support on Linux and Windows**.
+`agent-notify` is **macOS-first**, with **basic notification support on Linux and Windows** plus downloadable standalone binaries for those platforms.
 
 ## Why
 
@@ -26,9 +26,9 @@ AI agents can take minutes on complex tasks. Instead of watching the terminal, y
 
 ## Platform support
 
-- **macOS** — full feature set: native helper, app icon, sounds, and optional click-to-restore
-- **Linux** — basic notifications only via `notify-send`
-- **Windows** — basic notifications only via PowerShell / BurntToast
+- **macOS** — full feature set: native helper, app icon, sounds, optional click-to-restore, Homebrew install, and standalone tarballs
+- **Linux** — basic notifications via `notify-send`, with standalone release tarballs for `x64` and `arm64`
+- **Windows** — basic notifications via PowerShell / BurntToast, with a standalone `x64` release zip
 
 ## Install
 
@@ -44,6 +44,16 @@ Exact release pinning:
 ```sh
 brew install piqusy/tap/agent-notify@<version>
 ```
+
+### Standalone binaries
+
+Download the asset matching your OS/CPU from the latest [GitHub Release](https://github.com/piqusy/agent-notify/releases):
+
+- macOS: `agent-notify-darwin-arm64.tar.gz`, `agent-notify-darwin-x64.tar.gz`
+- Linux: `agent-notify-linux-arm64.tar.gz`, `agent-notify-linux-x64.tar.gz`
+- Windows: `agent-notify-windows-x64.zip`
+
+Each archive contains the CLI binary under `bin/` plus the bundled integration files.
 
 ### From source
 
@@ -247,7 +257,7 @@ For Pi specifically, rerun `./install.sh` after editing `packages/pi-coding-agen
 
 - **macOS notification permissions** — the most common issue. Open **System Settings → Notifications → Agent Notify** and enable **Allow Notifications**. Set the alert style to **Banners** or **Alerts**.
 - **macOS native helper missing** — if you installed from source on macOS, rerun `bun run build` and make sure the helper app was built successfully.
-- **Linux backend** — make sure `notify-send` is installed and available on `PATH`.
+- **Linux backend** — make sure `notify-send` is installed and available on `PATH`, even when using the standalone binary.
 - **Windows backend** — make sure PowerShell is available. BurntToast is preferred; without it, agent-notify falls back to a message box.
 - **Fallback backend** — if the macOS helper app is unavailable, agent-notify can fall back to `osascript`, but the bundled helper is the supported macOS path.
 - **Focus detection** — if your terminal is the frontmost app, notifications are suppressed by design. Switch to another app or set `"terminalApp": null` in config to disable focus detection entirely.

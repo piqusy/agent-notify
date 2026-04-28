@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.0] — 2026-04-28
+
+### Added
+- Standalone release binaries are now published for Linux (`x64`, `arm64`) and Windows (`x64`) in addition to the existing macOS archives
+
+### Changed
+- GitHub Release packaging now uploads multi-platform archives and checksums, while keeping the existing Homebrew/macOS release flow unchanged
+
 ## [0.1.50] — 2026-04-28
 
 ### Added
