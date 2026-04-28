@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.2] — 2026-04-28
+
+### Added
+- New combined GitHub issue template for Linux/Windows standalone binary reports, collecting environment details and diagnostic output needed for cross-platform triage
+
+### Changed
+- macOS helper discovery now verifies the expected bundle structure and bundle identifier before trusting a helper app candidate
+- Installer asset resolution now validates bundled integration files before copying them into user-owned locations
+
 ## [0.2.1] — 2026-04-28
 
 ### Added

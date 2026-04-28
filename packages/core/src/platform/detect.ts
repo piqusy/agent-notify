@@ -1,5 +1,5 @@
 import { execSync } from "child_process";
-import { existsSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { dirname, join, resolve } from "path";
 import { fileURLToPath } from "url";
 import type { NotifyBackend } from "../types.js";
@@ -32,6 +32,22 @@ function trustedCandidateRoots(): string[] {
   ]);
 }
 
+export function verifyMacOSHelperApp(appPath: string): boolean {
+  const infoPlist = join(appPath, "Contents", "Info.plist");
+  const binary = join(appPath, "Contents", "MacOS", "AgentNotify");
+
+  if (!existsSync(infoPlist) || !existsSync(binary)) {
+    return false;
+  }
+
+  try {
+    const plist = readFileSync(infoPlist, "utf8");
+    return plist.includes(`<key>CFBundleIdentifier</key><string>${MACOS_HELPER_BUNDLE_ID}</string>`);
+  } catch {
+    return false;
+  }
+}
+
 export function findMacOSHelperApp(): string | null {
   const candidates = unique(trustedCandidateRoots().flatMap((root) => [
     join(root, "packages", "macos-helper", "dist", "AgentNotify.app"),
@@ -41,7 +57,7 @@ export function findMacOSHelperApp(): string | null {
   ]));
 
   for (const candidate of candidates) {
-    if (existsSync(candidate)) {
+    if (existsSync(candidate) && verifyMacOSHelperApp(candidate)) {
       return candidate;
     }
   }

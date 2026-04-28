@@ -1,4 +1,4 @@
-import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { dirname, isAbsolute, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -89,8 +89,62 @@ function resolveAsset(relativePaths: string[]): string {
   throw new Error(`Could not locate bundled integration asset. Tried: ${relativePaths.join(", ")}`)
 }
 
+function readRequiredAssetText(path: string, label: string): string {
+  if (!isAbsolute(path)) {
+    throw new Error(`${label} must resolve to an absolute path: ${path}`)
+  }
+
+  if (!existsSync(path)) {
+    throw new Error(`${label} does not exist: ${path}`)
+  }
+
+  const stat = statSync(path)
+  if (!stat.isFile() || stat.size === 0) {
+    throw new Error(`${label} must be a non-empty file: ${path}`)
+  }
+
+  return readFileSync(path, "utf8")
+}
+
+export function validateBundledAssets(assets: ResolvedAssets): void {
+  const stop = readRequiredAssetText(assets.claudeCode.stop, "Claude Code stop hook")
+  const notification = readRequiredAssetText(assets.claudeCode.notification, "Claude Code notification hook")
+  const permissionRequest = readRequiredAssetText(assets.claudeCode.permissionRequest, "Claude Code permission hook")
+
+  for (const [label, source] of [
+    ["Claude Code stop hook", stop],
+    ["Claude Code notification hook", notification],
+    ["Claude Code permission hook", permissionRequest],
+  ] as const) {
+    if (!source.startsWith("#!/usr/bin/env bash\n")) {
+      throw new Error(`${label} is missing the expected bash shebang`)
+    }
+  }
+
+  const opencodeIndex = readRequiredAssetText(assets.opencode.indexJs, "OpenCode plugin entry")
+  if (!opencodeIndex.includes("OpenCodeAgentNotify") && !opencodeIndex.includes("export const plugin")) {
+    throw new Error("OpenCode plugin entry did not match the expected bundled shape")
+  }
+
+  if (assets.opencode.indexDts) {
+    readRequiredAssetText(assets.opencode.indexDts, "OpenCode plugin types")
+  }
+
+  if (assets.opencode.packageJson) {
+    const opencodePackage = JSON.parse(readRequiredAssetText(assets.opencode.packageJson, "OpenCode plugin package.json")) as { name?: string }
+    if (opencodePackage.name !== "opencode-agent-notify") {
+      throw new Error(`OpenCode plugin package.json has an unexpected name: ${opencodePackage.name ?? "(missing)"}`)
+    }
+  }
+
+  const piExtension = readRequiredAssetText(assets.pi.extension, "Pi extension")
+  if (!piExtension.includes("agent-notify") || !piExtension.includes("classifyPiAgentState")) {
+    throw new Error("Pi extension did not match the expected bundled shape")
+  }
+}
+
 export function resolveBundledAssets(): ResolvedAssets {
-  return {
+  const assets = {
     claudeCode: {
       stop: resolveAsset([
         "libexec/claude-code/hooks/stop.sh",
@@ -145,6 +199,9 @@ export function resolveBundledAssets(): ResolvedAssets {
       ]),
     },
   }
+
+  validateBundledAssets(assets)
+  return assets
 }
 
 function ensureDir(path: string): void {

@@ -5,7 +5,7 @@ import { join } from "node:path";
 vi.mock("child_process");
 vi.mock("fs");
 
-import { detectMacOSBackend, findMacOSHelperApp } from "../platform/detect.js";
+import { detectMacOSBackend, findMacOSHelperApp, verifyMacOSHelperApp } from "../platform/detect.js";
 import * as cp from "child_process";
 import * as fs from "fs";
 
@@ -25,8 +25,9 @@ describe("detectMacOSBackend", () => {
     expect(await detectMacOSBackend("macos-helper")).toBe("macos-helper");
   });
 
-  it("returns macos-helper if bundled helper app is found", async () => {
-    vi.mocked(fs.existsSync).mockImplementation((path) => String(path).includes("AgentNotify.app"));
+  it("returns macos-helper if bundled helper app is found and verified", async () => {
+    vi.mocked(fs.existsSync).mockImplementation((path) => String(path).includes("AgentNotify.app") || String(path).includes("Info.plist") || String(path).includes("/MacOS/AgentNotify"));
+    vi.mocked(fs.readFileSync).mockReturnValue(`<?xml version="1.0"?><plist><dict><key>CFBundleIdentifier</key><string>io.github.piqusy.agentnotify</string></dict></plist>` as any);
     expect(await detectMacOSBackend(null)).toBe("macos-helper");
   });
 
@@ -53,5 +54,12 @@ describe("detectMacOSBackend", () => {
     vi.mocked(fs.existsSync).mockImplementation((path) => String(path) === fakeApp);
 
     expect(findMacOSHelperApp()).toBeNull();
+  });
+
+  it("rejects helper apps with the wrong bundle identifier", () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.readFileSync).mockReturnValue(`<?xml version="1.0"?><plist><dict><key>CFBundleIdentifier</key><string>evil.app</string></dict></plist>` as any);
+
+    expect(verifyMacOSHelperApp("/tmp/AgentNotify.app")).toBe(false);
   });
 });
