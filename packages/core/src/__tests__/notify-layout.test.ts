@@ -9,17 +9,22 @@ vi.mock("node:child_process", () => ({
 }))
 
 vi.mock("../config.js", () => ({
-  loadConfig: vi.fn(async () => ({
-    events: { done: true, question: true, permission: true },
-    terminalApp: null,
-    clickRestore: { enabled: false },
-    cooldownSeconds: 0,
-    quietHours: null,
-    sounds: { done: null, question: null, permission: null },
-    backend: null,
-    zellij: {
-      tabIndicator: { enabled: true, prefix: " ● " },
-      paneIndicator: { enabled: false, mode: "background", bg: "#3c3836", clearOn: "origin-pane-focus" },
+  loadConfigResult: vi.fn(async () => ({
+    path: "/tmp/agent-notify-test-config.json",
+    status: "ok",
+    issues: [],
+    config: {
+      events: { done: true, question: true, permission: true },
+      terminalApp: null,
+      clickRestore: { enabled: false },
+      cooldownSeconds: 0,
+      quietHours: null,
+      sounds: { done: null, question: null, permission: null },
+      backend: null,
+      zellij: {
+        tabIndicator: { enabled: true, prefix: " ● " },
+        paneIndicator: { enabled: false, mode: "background", bg: "#3c3836", clearOn: "origin-pane-focus" },
+      },
     },
   })),
 }))

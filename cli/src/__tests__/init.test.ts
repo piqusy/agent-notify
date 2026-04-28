@@ -18,7 +18,12 @@ const mockState = vi.hoisted(() => ({
       paneIndicator: { enabled: false, mode: "background", bg: "#3c3836", clearOn: "origin-pane-focus" },
     },
   },
-  loadConfig: vi.fn(),
+  loadConfigResult: vi.fn(async () => ({
+    path: "/tmp/agent-notify-test-config.json",
+    status: "ok",
+    config: mockState.defaultConfig,
+    issues: [],
+  })),
   notify: vi.fn(async () => undefined),
   resolveTerminalApp: vi.fn((term: string) => ({ ghostty: "Ghostty", kitty: "Kitty", wezterm: "WezTerm" }[term] ?? null)),
   selectConfigs: [] as Array<Record<string, unknown>>,
@@ -36,7 +41,7 @@ vi.mock("@agent-notify/core", () => ({
   BUILTIN_SOUNDS: ["Morse", "Submarine", "Glass"],
   defaultConfig: mockState.defaultConfig,
   defaultConfigPath: "/tmp/agent-notify-test-config.json",
-  loadConfig: mockState.loadConfig,
+  loadConfigResult: mockState.loadConfigResult,
   notify: mockState.notify,
   TERM_PROGRAM_MAP: { ghostty: "Ghostty", kitty: "Kitty", wezterm: "WezTerm" },
   resolveTerminalApp: mockState.resolveTerminalApp,
@@ -98,7 +103,7 @@ describe("cmdInit", () => {
     mockState.inputConfigs.length = 0
     mockState.confirmConfigs.length = 0
     mockState.checkboxConfigs.length = 0
-    mockState.loadConfig.mockReset()
+    mockState.loadConfigResult.mockClear()
     mockState.notify.mockClear()
     mockState.resolveTerminalApp.mockClear()
     mockState.playSound.mockClear()

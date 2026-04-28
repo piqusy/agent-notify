@@ -5,7 +5,7 @@ import {
   BUILTIN_SOUNDS,
   defaultConfig,
   defaultConfigPath,
-  loadConfig,
+  loadConfigResult,
   notify,
   TERM_PROGRAM_MAP,
   resolveTerminalApp,
@@ -115,7 +115,22 @@ function detectMacOSVersion(): string | null {
 
 export async function cmdInit(options: CmdInitOptions = {}): Promise<void> {
   const configPath = options.configPath ?? defaultConfigPath
-  const existingConfig = options.existingConfig ?? await loadConfig(configPath)
+  const loadedConfig = options.existingConfig
+    ? { config: options.existingConfig, status: "ok", issues: [] }
+    : await loadConfigResult(configPath)
+  const existingConfig = loadedConfig.config
+
+  if (!options.existingConfig) {
+    if (loadedConfig.status === "invalid-json") {
+      console.log(`Warning: existing config at ${configPath} contains invalid JSON. The wizard will use defaults until you save a fixed config.\n`)
+    } else if (loadedConfig.status === "invalid-fields") {
+      console.log(`Warning: existing config at ${configPath} has invalid settings. The wizard will keep valid values and reset invalid ones to defaults.`)
+      for (const problem of loadedConfig.issues) {
+        console.log(`  - ${problem.path}: ${problem.message}`)
+      }
+      console.log("")
+    }
+  }
 
   console.log("agent-notify setup wizard")
   console.log("=========================\n")

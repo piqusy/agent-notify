@@ -193,6 +193,8 @@ agent-notify uninstall pi
 `sounds.permission: null` — falls back to the question sound.  
 `quietHours: null` — disables quiet hours entirely (sounds play at all times).
 
+Missing config fields are merged with defaults automatically. If the config contains invalid JSON or invalid values, `agent-notify doctor` reports the exact problems and invalid settings fall back to defaults until you save a corrected config.
+
 ## Requirements
 
 - [bun](https://bun.sh) (for source install only — Homebrew install is standalone)
@@ -209,6 +211,10 @@ agent-notify doctor
 ```
 
 It checks config validity, backend detection, notification permissions, focus state, quiet hours, helper availability, and sound files in one pass.
+
+### Config errors
+
+If `~/.config/agent-notify/config.json` contains invalid JSON or bad values, `agent-notify` no longer silently resets everything. Invalid settings are reported by `agent-notify doctor`, and only those broken settings fall back to defaults until you fix and save the file again.
 
 ## Local testing
 

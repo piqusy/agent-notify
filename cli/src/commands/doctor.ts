@@ -1,8 +1,8 @@
 import { execFileSync, execSync } from "node:child_process"
-import { existsSync, readFileSync } from "node:fs"
+import { existsSync } from "node:fs"
 import {
   defaultConfigPath,
-  loadConfig,
+  loadConfigResult,
   resolveTerminalApp,
   isTerminalFocused,
   isQuietHour,
@@ -78,29 +78,29 @@ function describeIconBehavior(backend: NotifyBackend | null): { level: "ok" | "w
   return { level: "ok", detail: "Platform default icon will be used" }
 }
 
+function printConfigIssues(issues: Array<{ path: string; message: string }>): void {
+  for (const problem of issues) {
+    console.log(`                    - ${problem.path}: ${problem.message}`)
+  }
+}
+
 export async function cmdDoctor(): Promise<void> {
   console.log("agent-notify doctor")
   console.log("====================\n")
 
-  const configExists = existsSync(defaultConfigPath)
-  let config: Config | null = null
-  if (configExists) {
-    try {
-      const raw = readFileSync(defaultConfigPath, "utf8")
-      JSON.parse(raw)
-      config = await loadConfig(defaultConfigPath)
-      line(OK, "Config", defaultConfigPath)
-    } catch (e) {
-      line(FAIL, "Config", `${defaultConfigPath} — invalid JSON: ${e instanceof Error ? e.message : e}`)
-    }
-  } else {
-    line(WARN, "Config", `${defaultConfigPath} — not found (using defaults)`)
-    config = await loadConfig()
-  }
+  const configResult = await loadConfigResult(defaultConfigPath)
+  const config: Config = configResult.config
 
-  if (!config) {
-    console.log("\nCannot continue without a valid config.")
-    return
+  if (configResult.status === "ok") {
+    line(OK, "Config", defaultConfigPath)
+  } else if (configResult.status === "missing") {
+    line(WARN, "Config", `${defaultConfigPath} — not found (using defaults)`)
+  } else if (configResult.status === "invalid-json") {
+    line(FAIL, "Config", `${defaultConfigPath} — invalid JSON (using defaults)`)
+    printConfigIssues(configResult.issues)
+  } else {
+    line(WARN, "Config", `${defaultConfigPath} — invalid settings reset to defaults`)
+    printConfigIssues(configResult.issues)
   }
 
   const macVer = getMacOSVersion()

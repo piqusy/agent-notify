@@ -2,7 +2,7 @@ import { execSync } from "node:child_process"
 import * as path from "node:path"
 import type { Config, NotifyPayload, NotifyResult, QuietHours, NotifyTrigger } from "./types.js"
 import type { NotifyInput } from "./types.js"
-import { loadConfig } from "./config.js"
+import { loadConfigResult } from "./config.js"
 import { checkAndUpdateCooldown, cooldownFilePath } from "./cooldown.js"
 import { isTerminalFocused, resolveTerminalApp } from "./focus.js"
 import { isZellijSession, isPaneTabActive, getCurrentTabInfo, markTabNotified } from "./zellij.js"
@@ -58,8 +58,23 @@ function parsePositiveIntEnv(name: string): number | undefined {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
 }
 
+const warnedConfigPaths = new Set<string>()
+
+function warnOnInvalidConfig(path: string, summary: string): void {
+  if (warnedConfigPaths.has(path)) return
+  warnedConfigPaths.add(path)
+  console.error(`[agent-notify] Config warning: ${summary}. Run "agent-notify doctor" for details.`)
+}
+
 export async function notify(input: NotifyInput): Promise<NotifyResult> {
-  const config: Config = await loadConfig()
+  const configResult = await loadConfigResult()
+  const config: Config = configResult.config
+
+  if (configResult.status === "invalid-json") {
+    warnOnInvalidConfig(configResult.path, `${configResult.issues[0]?.message ?? "Invalid config"} in ${configResult.path}; using defaults`)
+  } else if (configResult.status === "invalid-fields") {
+    warnOnInvalidConfig(configResult.path, `${configResult.issues.length} invalid config setting${configResult.issues.length === 1 ? "" : "s"} in ${configResult.path}; invalid fields reset to defaults`)
+  }
   const terminalApp = config.terminalApp ?? resolveTerminalApp(process.env.TERM_PROGRAM ?? "")
 
   // 1. Event filter — use trigger if provided, otherwise fall back to state

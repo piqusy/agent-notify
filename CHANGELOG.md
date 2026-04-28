@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.48] — 2026-04-28
+
+### Changed
+- Config loading now validates JSON structure and field values, reports exact problems via `agent-notify doctor`, and falls back only for invalid settings instead of silently resetting the whole config
+
 ## [0.1.47] — 2026-04-28
 
 ### Added
