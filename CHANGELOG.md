@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.6] — 2026-04-28
+
+### Added
+- New Zellij working-state tab indicator (`◐`) with per-pane tracking and correct precedence behind attention indicators, plus CLI `working-start` / `working-stop` commands
+- Pi integration now marks the current Zellij pane as working on `agent_start` and clears it on `agent_end`
+
+### Changed
+- macOS focus suppression now prefers frontmost-app bundle IDs, using `lsappinfo` before AppleScript fallbacks, which fixes Warp frontmost detection in practice
+
 ## [0.2.5] — 2026-04-28
 
 ### Added

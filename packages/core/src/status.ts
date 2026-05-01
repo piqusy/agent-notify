@@ -67,7 +67,7 @@ export async function inspectStatus(options: { tool?: string } = {}): Promise<St
   })
   const terminalApp = terminal?.displayName ?? null
   const zellijSession = isZellijSession()
-  const terminalFocused = terminalApp !== null ? await isTerminalFocused(terminalApp) : false
+  const terminalFocused = terminal !== null ? await isTerminalFocused(terminal) : false
   let activeTabVisible: boolean | null = null
   let suppressesNotifications = false
 

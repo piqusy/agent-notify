@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { exec, spawn, spawnSync } from "node:child_process"
@@ -10,17 +10,21 @@ const ZELLIJ_STATE_PREFIX = "agent-notify-zellij-state"
 const POLLER_PID_FILE = "poller.pid"
 
 const TAB_NOTIFY_PREFIX = " ● "
+const TAB_WORKING_PREFIX = " ◐ "
 
 export type ZellijNotifyOptions = {
   sessionName?: string | null
   originPaneId?: number | null
   tabIndicator?: Config["zellij"]["tabIndicator"]
   paneIndicator?: Config["zellij"]["paneIndicator"]
+  workingPrefix?: string
 }
 
 type PendingPaneState = {
   paneId: number
-  notifiedAt: number
+  updatedAt: number
+  attentionAt: number | null
+  workingAt: number | null
   paneIndicatorApplied: boolean
 }
 
@@ -48,12 +52,18 @@ function currentTabPrefix(tabIndicator: Config["zellij"]["tabIndicator"] | undef
   return tabIndicator?.prefix ?? TAB_NOTIFY_PREFIX
 }
 
-function stripTabPrefix(tabName: string, prefix: string): string {
-  if (tabName.startsWith(prefix)) {
-    return tabName.slice(prefix.length)
+function currentWorkingPrefix(workingPrefix: string | undefined): string {
+  return workingPrefix ?? TAB_WORKING_PREFIX
+}
+
+function stripKnownTabPrefixes(tabName: string, prefixes: string[]): string {
+  for (const prefix of prefixes) {
+    if (tabName.startsWith(prefix)) {
+      return tabName.slice(prefix.length)
+    }
   }
 
-  return tabName.replace(/^\s*●\s*/, "")
+  return tabName.replace(/^\s*[●◐]\s*/, "")
 }
 
 function scrubbedZellijEnv(extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
@@ -62,19 +72,6 @@ function scrubbedZellijEnv(extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
   delete env.ZELLIJ_PANE_ID
   delete env.ZELLIJ_SESSION_NAME
   return env
-}
-
-function runZellijAction(args: string[], options: { sessionName?: string | null } = {}): void {
-  const commandArgs = [
-    ...(options.sessionName ? ["--session", options.sessionName] : []),
-    "action",
-    ...args,
-  ]
-
-  spawnSync("zellij", commandArgs, {
-    stdio: "ignore",
-    env: scrubbedZellijEnv(),
-  })
 }
 
 function applyPaneIndicator(
@@ -103,6 +100,46 @@ function applyPaneIndicator(
   }
 }
 
+function clearPaneIndicator(sessionName: string | null, paneId: number): void {
+  try {
+    spawnSync("zellij", [
+      ...(sessionName ? ["--session", sessionName] : []),
+      "action",
+      "set-pane-color",
+      "--pane-id",
+      String(paneId),
+      "--reset",
+    ], {
+      stdio: "ignore",
+      env: scrubbedZellijEnv(),
+    })
+  } catch {
+    // best effort only
+  }
+}
+
+function readPendingPaneState(
+  sessionName: string | null,
+  tabId: number,
+  paneId: number,
+): PendingPaneState | null {
+  const file = pendingPaneFile(sessionName, tabId, paneId)
+  if (!existsSync(file)) return null
+
+  try {
+    const parsed = JSON.parse(readFileSync(file, "utf8")) as Partial<PendingPaneState>
+    return {
+      paneId,
+      updatedAt: typeof parsed.updatedAt === "number" ? parsed.updatedAt : 0,
+      attentionAt: typeof parsed.attentionAt === "number" ? parsed.attentionAt : null,
+      workingAt: typeof parsed.workingAt === "number" ? parsed.workingAt : null,
+      paneIndicatorApplied: Boolean(parsed.paneIndicatorApplied),
+    }
+  } catch {
+    return null
+  }
+}
+
 function writePendingPaneState(
   sessionName: string | null,
   tabId: number,
@@ -112,6 +149,19 @@ function writePendingPaneState(
   const dir = tabStateDir(sessionName, tabId)
   mkdirSync(dir, { recursive: true })
   writeFileSync(pendingPaneFile(sessionName, tabId, paneId), `${JSON.stringify(state)}\n`, "utf8")
+}
+
+function removePendingPaneState(sessionName: string | null, tabId: number, paneId: number): void {
+  rmSync(pendingPaneFile(sessionName, tabId, paneId), { force: true })
+  rmdirIfEmpty(tabStateDir(sessionName, tabId))
+}
+
+function rmdirIfEmpty(dir: string): void {
+  try {
+    rmSync(dir, { recursive: false })
+  } catch {
+    // ignore non-empty or missing dirs
+  }
 }
 
 function readPollerPid(sessionName: string | null): number | null {
@@ -138,7 +188,7 @@ function isPidRunning(pid: number | null): boolean {
   }
 }
 
-function ensureSessionPoller(sessionName: string | null, tabPrefix: string): void {
+function ensureSessionPoller(sessionName: string | null, attentionPrefix: string, workingPrefix: string): void {
   const pid = readPollerPid(sessionName)
   if (isPidRunning(pid)) return
 
@@ -156,11 +206,26 @@ run_zellij() {
 }
 strip_prefix() {
   name="$1"
-  stripped="\${name#"$TAB_PREFIX"}"
-  if [ "$stripped" != "$name" ]; then
-    printf '%s' "$stripped"
-  else
-    printf '%s' "$name"
+  case "$name" in
+    "$ATTENTION_PREFIX"*) printf '%s' "\${name#"$ATTENTION_PREFIX"}" ;;
+    "$WORKING_PREFIX"*) printf '%s' "\${name#"$WORKING_PREFIX"}" ;;
+    *) printf '%s' "$name" | sed -E 's/^[[:space:]]*[●◐][[:space:]]*//' ;;
+  esac
+}
+rename_tab_for_state() {
+  tab_id="$1"
+  current_name="$2"
+  desired_state="$3"
+  stripped_name="$(strip_prefix "$current_name")"
+  case "$desired_state" in
+    attention) desired_name="$ATTENTION_PREFIX$stripped_name" ;;
+    working) desired_name="$WORKING_PREFIX$stripped_name" ;;
+    none) desired_name="$stripped_name" ;;
+    *) desired_name="$current_name" ;;
+  esac
+
+  if [ "$desired_name" != "$current_name" ]; then
+    run_zellij rename-tab -t "$tab_id" "$desired_name" >/dev/null 2>&1 || true
   fi
 }
 cleanup() {
@@ -178,6 +243,8 @@ while :; do
     [ -d "$tab_dir" ] || continue
     tab_name="$(basename "$tab_dir")"
     tab_id="\${tab_name#tab-}"
+    has_attention=false
+    has_working=false
     for pane_file in "$tab_dir"/pane-*.json; do
       [ -f "$pane_file" ] || continue
       pane_name="$(basename "$pane_file")"
@@ -188,6 +255,7 @@ while :; do
         rm -f "$pane_file"
         continue
       fi
+
       focused=false
       for client_pane_id in $client_pane_ids; do
         if [ "$client_pane_id" = "$pane_id" ]; then
@@ -195,36 +263,58 @@ while :; do
           break
         fi
       done
-      if [ "$focused" = true ]; then
+
+      attention_at="$(jq -r '.attentionAt // empty' "$pane_file" 2>/dev/null || true)"
+      working_at="$(jq -r '.workingAt // empty' "$pane_file" 2>/dev/null || true)"
+
+      if [ "$focused" = true ] && [ -n "$attention_at" ]; then
         applied="$(jq -r '.paneIndicatorApplied // false' "$pane_file" 2>/dev/null || echo false)"
         if [ "$applied" = "true" ]; then
           run_zellij set-pane-color --pane-id "$pane_id" --reset >/dev/null 2>&1 || true
         fi
+        tmp_file="$pane_file.tmp"
+        jq '.attentionAt = null | .paneIndicatorApplied = false | .updatedAt = (now | floor)' "$pane_file" > "$tmp_file" 2>/dev/null && mv "$tmp_file" "$pane_file"
+        attention_at=""
+        working_at="$(jq -r '.workingAt // empty' "$pane_file" 2>/dev/null || true)"
+      fi
+
+      if [ -z "$attention_at" ] && [ -z "$working_at" ]; then
         rm -f "$pane_file"
+        continue
+      fi
+
+      if [ -n "$attention_at" ]; then
+        has_attention=true
+      elif [ -n "$working_at" ]; then
+        has_working=true
       fi
     done
+
     remaining=false
     for pane_file in "$tab_dir"/pane-*.json; do
       [ -f "$pane_file" ] || continue
       remaining=true
       break
     done
+
     current_tab_name="$(printf '%s' "$tabs_json" | jq -r --argjson tabId "$tab_id" '.[] | select(.tab_id == $tabId) | .name' 2>/dev/null | head -n 1 || true)"
+
+    desired_state=none
+    if [ "$has_attention" = true ]; then
+      desired_state=attention
+    elif [ "$has_working" = true ]; then
+      desired_state=working
+    fi
+
     if [ "$remaining" = true ]; then
       pending_any=true
-      if [ -n "$current_tab_name" ]; then
-        case "$current_tab_name" in
-          "$TAB_PREFIX"*) ;;
-          *) run_zellij rename-tab -t "$tab_id" "$TAB_PREFIX$current_tab_name" >/dev/null 2>&1 || true ;;
-        esac
-      fi
-    else
-      if [ -n "$current_tab_name" ]; then
-        stripped_name="$(strip_prefix "$current_tab_name")"
-        if [ "$stripped_name" != "$current_tab_name" ]; then
-          run_zellij rename-tab -t "$tab_id" "$stripped_name" >/dev/null 2>&1 || true
-        fi
-      fi
+    fi
+
+    if [ -n "$current_tab_name" ]; then
+      rename_tab_for_state "$tab_id" "$current_tab_name" "$desired_state"
+    fi
+
+    if [ "$remaining" = false ]; then
       rmdir "$tab_dir" 2>/dev/null || true
     fi
   done
@@ -244,7 +334,8 @@ done
       STATE_DIR: dir,
       PID_FILE: pollerPidFile(sessionName),
       SESSION_NAME: sessionName ?? "",
-      TAB_PREFIX: tabPrefix,
+      ATTENTION_PREFIX: attentionPrefix,
+      WORKING_PREFIX: workingPrefix,
     },
   })
 
@@ -289,42 +380,104 @@ export async function getCurrentTabInfo(): Promise<{ tabId: number; tabName: str
 }
 
 /**
- * Adds a ● prefix to the given tab's name, records the originating pane as pending,
- * optionally applies a pane indicator, and ensures the session poller is running.
- * No-ops if the rename action fails.
+ * Adds an attention prefix to the given tab's name, records the originating pane as needing
+ * attention, optionally applies a pane indicator, and ensures the session poller is running.
  */
 export function markTabNotified(tabId: number, originalName: string, options: ZellijNotifyOptions = {}): void {
   const sessionName = options.sessionName ?? process.env.ZELLIJ_SESSION_NAME ?? ""
   const originPaneId = options.originPaneId ?? Number.parseInt(process.env.ZELLIJ_PANE_ID ?? "", 10)
   const paneId = Number.isNaN(originPaneId) ? null : originPaneId
   const tabPrefix = currentTabPrefix(options.tabIndicator)
+  const workingPrefix = currentWorkingPrefix(options.workingPrefix)
   const paneIndicator = options.paneIndicator
   const effectiveTabIndicatorEnabled = (options.tabIndicator?.enabled ?? true) || Boolean(paneIndicator?.enabled)
 
-  if (!effectiveTabIndicatorEnabled) return
+  if (!effectiveTabIndicatorEnabled || paneId === null) return
+
+  const strippedName = stripKnownTabPrefixes(originalName, [tabPrefix, workingPrefix])
 
   try {
-    if (effectiveTabIndicatorEnabled && !originalName.startsWith(tabPrefix)) {
-      const result = spawnSync("zellij", ["action", "rename-tab", "-t", String(tabId), `${tabPrefix}${originalName}`], {
-        stdio: "ignore",
-      })
-      if (result.error || result.status !== 0) return
-    }
+    const result = spawnSync("zellij", ["action", "rename-tab", "-t", String(tabId), `${tabPrefix}${strippedName}`], {
+      stdio: "ignore",
+    })
+    if (result.error || result.status !== 0) return
   } catch {
     return
   }
-
-  if (paneId === null) return
 
   const paneIndicatorApplied = applyPaneIndicator(sessionName, paneId, paneIndicator)
 
   writePendingPaneState(sessionName, tabId, paneId, {
     paneId,
-    notifiedAt: Math.floor(Date.now() / 1000),
+    updatedAt: Math.floor(Date.now() / 1000),
+    attentionAt: Math.floor(Date.now() / 1000),
+    workingAt: null,
     paneIndicatorApplied,
   })
 
-  ensureSessionPoller(sessionName, tabPrefix)
+  ensureSessionPoller(sessionName, tabPrefix, workingPrefix)
+}
+
+/**
+ * Marks the current pane as actively working. This updates per-pane state and lets the
+ * session poller derive a tab-level working prefix as long as no pane in the tab needs attention.
+ */
+export function markPaneWorking(tabId: number, originalName: string, options: ZellijNotifyOptions = {}): void {
+  const sessionName = options.sessionName ?? process.env.ZELLIJ_SESSION_NAME ?? ""
+  const originPaneId = options.originPaneId ?? Number.parseInt(process.env.ZELLIJ_PANE_ID ?? "", 10)
+  const paneId = Number.isNaN(originPaneId) ? null : originPaneId
+  const tabPrefix = currentTabPrefix(options.tabIndicator)
+  const workingPrefix = currentWorkingPrefix(options.workingPrefix)
+
+  if (paneId === null) return
+
+  const existing = readPendingPaneState(sessionName, tabId, paneId)
+  if (existing?.paneIndicatorApplied) {
+    clearPaneIndicator(sessionName, paneId)
+  }
+
+  writePendingPaneState(sessionName, tabId, paneId, {
+    paneId,
+    updatedAt: Math.floor(Date.now() / 1000),
+    attentionAt: null,
+    workingAt: Math.floor(Date.now() / 1000),
+    paneIndicatorApplied: false,
+  })
+
+  // Preserve the current visible name. The poller will derive the correct tab-level state,
+  // including attention > working precedence across multiple panes.
+  void originalName
+  ensureSessionPoller(sessionName, tabPrefix, workingPrefix)
+}
+
+/**
+ * Clears the working state for the current pane. Attention state, if any, is preserved.
+ */
+export function clearPaneWorking(tabId: number, options: ZellijNotifyOptions = {}): void {
+  const sessionName = options.sessionName ?? process.env.ZELLIJ_SESSION_NAME ?? ""
+  const originPaneId = options.originPaneId ?? Number.parseInt(process.env.ZELLIJ_PANE_ID ?? "", 10)
+  const paneId = Number.isNaN(originPaneId) ? null : originPaneId
+  const tabPrefix = currentTabPrefix(options.tabIndicator)
+  const workingPrefix = currentWorkingPrefix(options.workingPrefix)
+
+  if (paneId === null) return
+
+  const existing = readPendingPaneState(sessionName, tabId, paneId)
+  if (!existing) return
+
+  const nextState: PendingPaneState = {
+    ...existing,
+    updatedAt: Math.floor(Date.now() / 1000),
+    workingAt: null,
+  }
+
+  if (nextState.attentionAt === null && !nextState.paneIndicatorApplied) {
+    removePendingPaneState(sessionName, tabId, paneId)
+  } else {
+    writePendingPaneState(sessionName, tabId, paneId, nextState)
+  }
+
+  ensureSessionPoller(sessionName, tabPrefix, workingPrefix)
 }
 
 /**

@@ -5,7 +5,7 @@ import type { NotifyInput } from "./types.js"
 import { loadConfigResult } from "./config.js"
 import { checkAndUpdateCooldown, cooldownFilePath } from "./cooldown.js"
 import { isTerminalFocused, resolveTerminal } from "./focus.js"
-import { isZellijSession, isPaneTabActive, getCurrentTabInfo, markTabNotified } from "./zellij.js"
+import { isZellijSession, isPaneTabActive, getCurrentTabInfo, markTabNotified, clearPaneWorking } from "./zellij.js"
 import { resolveSound } from "./sounds.js"
 import { sendNotification } from "./platform/index.js"
 
@@ -42,7 +42,7 @@ function normalizeTabName(tabName: string, tabPrefix: string): string {
     return tabName.slice(tabPrefix.length).trim()
   }
 
-  return tabName.replace(/^\s*●\s*/, "").trim()
+  return tabName.replace(/^\s*[●◐]\s*/, "").trim()
 }
 
 function envFlagEnabled(name: string): boolean {
@@ -93,6 +93,16 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
     termProgram: process.env.TERM_PROGRAM ?? "",
   })
   const terminalApp = resolvedTerminal?.displayName ?? null
+  const zellijSession = isZellijSession()
+  const tabInfo = zellijSession ? await getCurrentTabInfo() : null
+
+  if (tabInfo) {
+    clearPaneWorking(tabInfo.tabId, {
+      sessionName: process.env.ZELLIJ_SESSION_NAME ?? null,
+      originPaneId: Number.parseInt(process.env.ZELLIJ_PANE_ID ?? "", 10),
+      tabIndicator: config.zellij.tabIndicator,
+    })
+  }
 
   // 1. Event filter — use trigger if provided, otherwise fall back to state
   const eventKey = input.trigger ?? input.state
@@ -100,8 +110,8 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
 
   // 2. Focus check — auto-detect terminal when terminalApp is null
   if (!input.skipFocusCheck && !input.force) {
-    if (terminalApp !== null && await isTerminalFocused(terminalApp)) {
-      if (isZellijSession()) {
+    if (resolvedTerminal !== null && await isTerminalFocused(resolvedTerminal)) {
+      if (zellijSession) {
         // Inside Zellij: only suppress if our tab is the active (visible) one
         if (await isPaneTabActive()) return { sent: false, reason: "terminal-focused" }
         // Tab not active — user is on a different tab, so notify
@@ -121,7 +131,6 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
   const cwd = input.cwd ?? process.cwd()
   const project = path.basename(cwd)
   const branch = getGitBranch(cwd)
-  const tabInfo = isZellijSession() ? await getCurrentTabInfo() : null
   const tabPrefix = config.zellij.tabIndicator.prefix
   const tabName = tabInfo ? normalizeTabName(tabInfo.tabName, tabPrefix) : project
 

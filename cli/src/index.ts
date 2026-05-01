@@ -4,7 +4,7 @@ import { ExitPromptError } from "@inquirer/core";
 import { cmdInit } from "./commands/init.js";
 import { cmdConfig } from "./commands/config.js";
 import { cmdDoctor } from "./commands/doctor.js";
-import { cmdDone, cmdPermission, cmdQuestion, cmdTest } from "./commands/notify.js";
+import { cmdDone, cmdPermission, cmdQuestion, cmdTest, cmdWorkingStart, cmdWorkingStop } from "./commands/notify.js";
 import { cmdStatus, cmdExplain } from "./commands/status.js";
 import { cmdInstall, cmdUninstall } from "./commands/install.js";
 import { playSoundSync } from "./sounds/play.js";
@@ -44,6 +44,10 @@ Usage:
                                           Send a "question/waiting" notification
   agent-notify permission [dir] [--tool <name>]
                                           Send a "permission request" notification
+  agent-notify working-start
+                                          Mark the current Zellij pane/tab as actively working
+  agent-notify working-stop
+                                          Clear the current Zellij pane working indicator
   agent-notify test [done|question|permission] [--force|-f]
                                           Send a test notification (--force bypasses focus/cooldown)
   agent-notify sounds                      List available notification sounds
@@ -72,6 +76,12 @@ async function main(): Promise<void> {
       break;
     case "permission":
       await cmdPermission(args);
+      break;
+    case "working-start":
+      await cmdWorkingStart();
+      break;
+    case "working-stop":
+      await cmdWorkingStop();
       break;
     case "test":
       await cmdTest(args);

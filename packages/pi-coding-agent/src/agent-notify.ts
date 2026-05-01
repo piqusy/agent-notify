@@ -78,11 +78,11 @@ function writeDebugLog(payload: unknown): void {
   }
 }
 
-function sendNotification(state: "done" | "question", cwd: string): void {
+function runAgentNotify(args: string[]): void {
   try {
     const child = spawn(
       "agent-notify",
-      [state, cwd, "--tool", "pi-coding-agent"],
+      args,
       {
         stdio: "ignore",
         detached: process.platform !== "win32",
@@ -96,7 +96,23 @@ function sendNotification(state: "done" | "question", cwd: string): void {
   }
 }
 
+function sendNotification(state: "done" | "question", cwd: string): void {
+  runAgentNotify([state, cwd, "--tool", "pi-coding-agent"])
+}
+
+function markWorkingStart(): void {
+  runAgentNotify(["working-start"])
+}
+
+function markWorkingStop(): void {
+  runAgentNotify(["working-stop"])
+}
+
 export default function agentNotify(pi: ExtensionAPI) {
+  pi.on("agent_start", async () => {
+    markWorkingStart()
+  })
+
   pi.on("agent_end", async (event, ctx) => {
     const state = classifyPiAgentState(event.messages)
 
@@ -106,6 +122,8 @@ export default function agentNotify(pi: ExtensionAPI) {
       classifiedState: state,
       messages: event.messages,
     })
+
+    markWorkingStop()
 
     if (!state) return
 

@@ -163,7 +163,7 @@ export async function cmdDoctor(): Promise<void> {
   }
 
   if (termApp) {
-    const focused = await isTerminalFocused(termApp)
+    const focused = await isTerminalFocused(resolvedTerminal ?? termApp)
     if (focused) {
       line(WARN, "Focus", `${termApp} is frontmost — notifications would be suppressed`)
     } else {

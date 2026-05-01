@@ -6,7 +6,7 @@ vi.mock("node:child_process", () => ({
 }))
 
 import * as childProcess from "node:child_process"
-import { isZellijSession, markTabNotified } from "../zellij.js"
+import { isZellijSession, markPaneWorking, markTabNotified } from "../zellij.js"
 
 // We mock the module-level execAsync by mocking child_process.exec
 // and then reimporting. Since Bun's ESM mock requires a factory, we
@@ -138,7 +138,8 @@ describe("markTabNotified", () => {
     const [cmd, args, opts] = spawnMock.mock.calls[0] as any
     expect(cmd).toBe("sh")
     expect(args).toEqual(["-c", expect.stringContaining("run_zellij()")])
-    expect(opts.env.TAB_PREFIX).toBe(" ● ")
+    expect(opts.env.ATTENTION_PREFIX).toBe(" ● ")
+    expect(opts.env.WORKING_PREFIX).toBe(" ◐ ")
     expect(opts.env.SESSION_NAME).toBe("test-session")
     expect(opts.env.STATE_DIR).toContain("agent-notify-zellij-state-test-session")
     expect(opts.env.PID_FILE).toContain("poller.pid")
@@ -149,6 +150,21 @@ describe("markTabNotified", () => {
     expect(args[1]).toContain("set-pane-color --pane-id")
     expect(args[1]).toContain('"$STATE_DIR"/tab-*')
     expect(args[1]).toContain("paneIndicatorApplied")
-    expect(args[1]).toContain("TAB_PREFIX")
+    expect(args[1]).toContain("ATTENTION_PREFIX")
+    expect(args[1]).toContain("WORKING_PREFIX")
+  })
+
+  it("tracks working state with a distinct poller prefix", () => {
+    process.env.ZELLIJ_PANE_ID = "12"
+    process.env.ZELLIJ_SESSION_NAME = "test-session"
+
+    const spawnMock = childProcess.spawn as unknown as { mock: { calls: unknown[][] } }
+
+    markPaneWorking(12, "api")
+
+    expect(spawnMock).toHaveBeenCalled()
+    const [, args, opts] = spawnMock.mock.calls[0] as any
+    expect(args[1]).toContain("WORKING_PREFIX")
+    expect(opts.env.WORKING_PREFIX).toBe(" ◐ ")
   })
 })

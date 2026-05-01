@@ -7,7 +7,7 @@ vi.mock("node:child_process", () => ({
   }),
 }))
 
-import { execFileSync } from "node:child_process"
+import { exec, execFileSync } from "node:child_process"
 import {
   resolveTerminal,
   resolveTerminalApp,
@@ -140,5 +140,47 @@ describe("isTerminalFocused", () => {
     const result = await isTerminalFocused("Ghostty")
     Object.defineProperty(process, "platform", { value: origPlatform, configurable: true })
     expect(result).toBe(false)
+  })
+
+  it("prefers bundle-id matching on darwin", async () => {
+    const origPlatform = process.platform
+    Object.defineProperty(process, "platform", { value: "darwin", configurable: true })
+    vi.mocked(exec)
+      .mockImplementationOnce(((_command: string, callback: (error: Error | null, result: { stdout: string; stderr: string }) => void) => {
+        callback(null, { stdout: "ASN:0x0-0x123:\n", stderr: "" })
+        return {} as never
+      }) as never)
+      .mockImplementationOnce(((_command: string, callback: (error: Error | null, result: { stdout: string; stderr: string }) => void) => {
+        callback(null, { stdout: '"CFBundleIdentifier"="dev.warp.Warp-Stable"\n"LSDisplayName"="Warp Preview"\n', stderr: "" })
+        return {} as never
+      }) as never)
+
+    await expect(isTerminalFocused({
+      id: "warp",
+      displayName: "Warp",
+      bundleId: "dev.warp.Warp-Stable",
+      source: "term-program",
+      reason: "TERM_PROGRAM=WarpTerminal",
+    })).resolves.toBe(true)
+
+    Object.defineProperty(process, "platform", { value: origPlatform, configurable: true })
+  })
+
+  it("falls back to a case-insensitive name match when bundle ids are unavailable", async () => {
+    const origPlatform = process.platform
+    Object.defineProperty(process, "platform", { value: "darwin", configurable: true })
+    vi.mocked(exec)
+      .mockImplementationOnce(((_command: string, callback: (error: Error | null, result: { stdout: string; stderr: string }) => void) => {
+        callback(null, { stdout: "ASN:0x0-0x123:\n", stderr: "" })
+        return {} as never
+      }) as never)
+      .mockImplementationOnce(((_command: string, callback: (error: Error | null, result: { stdout: string; stderr: string }) => void) => {
+        callback(null, { stdout: '"LSDisplayName"="ghostty"\n', stderr: "" })
+        return {} as never
+      }) as never)
+
+    await expect(isTerminalFocused("Ghostty")).resolves.toBe(true)
+
+    Object.defineProperty(process, "platform", { value: origPlatform, configurable: true })
   })
 })

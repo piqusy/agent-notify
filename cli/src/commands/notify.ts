@@ -1,4 +1,4 @@
-import { notify } from "@agent-notify/core"
+import { notify, isZellijSession, getCurrentTabInfo, markPaneWorking, clearPaneWorking } from "@agent-notify/core"
 
 function parseStringFlag(args: string[], flag: string): { value?: string; rest: string[] } {
   const idx = args.indexOf(flag)
@@ -32,6 +32,27 @@ export async function cmdPermission(rawArgs: string[]): Promise<void> {
   const { tool, rest } = parseNotifyFlags(rawArgs)
   const dir = rest[0]
   await notify({ state: "question", trigger: "permission", tool, cwd: dir ?? process.cwd() })
+}
+
+function currentZellijOptions() {
+  return {
+    sessionName: process.env.ZELLIJ_SESSION_NAME ?? null,
+    originPaneId: Number.parseInt(process.env.ZELLIJ_PANE_ID ?? "", 10),
+  }
+}
+
+export async function cmdWorkingStart(): Promise<void> {
+  if (!isZellijSession()) return
+  const tabInfo = await getCurrentTabInfo()
+  if (!tabInfo) return
+  markPaneWorking(tabInfo.tabId, tabInfo.tabName, currentZellijOptions())
+}
+
+export async function cmdWorkingStop(): Promise<void> {
+  if (!isZellijSession()) return
+  const tabInfo = await getCurrentTabInfo()
+  if (!tabInfo) return
+  clearPaneWorking(tabInfo.tabId, currentZellijOptions())
 }
 
 export async function cmdTest(subArgs: string[]): Promise<void> {
