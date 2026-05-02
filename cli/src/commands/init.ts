@@ -297,29 +297,7 @@ export async function cmdInit(options: CmdInitOptions = {}): Promise<void> {
         default: ZELLIJ_PANE_BG_CHOICES.some((choice) => choice.value === defaultPaneBg)
           ? defaultPaneBg
           : CUSTOM_CHOICE,
-        onPreview: (color) => {
-          if (!color || color === CUSTOM_CHOICE) return
-          const paneIdStr = process.env.ZELLIJ_PANE_ID
-          if (paneIdStr) {
-            import("node:child_process").then(({ spawnSync }) => {
-              spawnSync("zellij", ["action", "set-pane-color", "--pane-id", paneIdStr, "--bg", color], {
-                stdio: "ignore",
-              })
-            })
-          }
-        },
       }))
-
-      if (paneBgChoice !== CUSTOM_CHOICE) {
-        const paneIdStr = process.env.ZELLIJ_PANE_ID
-        if (paneIdStr) {
-          import("node:child_process").then(({ spawnSync }) => {
-            spawnSync("zellij", ["action", "clear-pane-color", "--pane-id", paneIdStr], {
-              stdio: "ignore",
-            })
-          })
-        }
-      }
 
       const paneBg = paneBgChoice === CUSTOM_CHOICE
         ? await ask(input({
