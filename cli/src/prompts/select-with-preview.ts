@@ -15,6 +15,7 @@ import {
   isUpKey,
   isDownKey,
   ExitPromptError,
+  useEffect,
   type Status,
 } from "@inquirer/core"
 import colors from "yoctocolors-cjs"
@@ -38,7 +39,9 @@ export interface SelectWithPreviewConfig<V> {
   loop?: boolean
   /** Label for the preview key (defaults to "preview sound") */
   previewLabel?: string
-  /** Called with the current choice value when user presses "p" */
+  /** Preview highlighted choice automatically while navigating */
+  previewOnHighlight?: boolean
+  /** Called with the current choice value when user presses "p" or highlight changes */
   onPreview?: (value: V) => void
 }
 
@@ -52,7 +55,7 @@ const selectTheme = {
 export const selectWithPreview: <V>(config: SelectWithPreviewConfig<V>) => Promise<V | typeof CANCEL> =
   createPrompt(
   <V>(config: SelectWithPreviewConfig<V>, done: (value: V | typeof CANCEL) => void): string => {
-    const { choices, pageSize = 7, loop = true, onPreview } = config
+    const { choices, pageSize = 7, loop = true, onPreview, previewOnHighlight = false } = config
     const theme = makeTheme(selectTheme, {})
 
     const firstEnabled = choices.findIndex((c) => !c.disabled)
@@ -65,6 +68,14 @@ export const selectWithPreview: <V>(config: SelectWithPreviewConfig<V>) => Promi
     const [status, setStatus] = useState<Status>("idle")
 
     const prefix = usePrefix({ status, theme })
+
+    useEffect(() => {
+      if (!previewOnHighlight || !onPreview || status === "done") return
+      const choice = choices[active]
+      if (choice && !choice.disabled) {
+        onPreview(choice.value)
+      }
+    }, [active, choices, onPreview, previewOnHighlight, status])
 
     useKeypress((key) => {
       if (status === "done") return
@@ -140,8 +151,11 @@ export const selectWithPreview: <V>(config: SelectWithPreviewConfig<V>) => Promi
       `${colors.bold("↑↓")}/${colors.bold("jk")} navigate`,
       `${colors.bold("enter")} select`,
     ]
-    if (onPreview) {
+    if (onPreview && !previewOnHighlight) {
       helpBindings.push(`${colors.bold("p")} ${config.previewLabel || "preview sound"}`)
+    }
+    if (onPreview && previewOnHighlight) {
+      helpBindings.push(`live ${config.previewLabel || "preview sound"}`)
     }
     helpBindings.push(`${colors.bold("esc")} cancel`)
     const helpTip =

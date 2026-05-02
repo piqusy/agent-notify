@@ -57,10 +57,10 @@ const ZELLIJ_MODE_CHOICES = [
 const ZELLIJ_PANE_BG_CHOICES = [
   { name: "Subtle neutral (#32302f)", value: "#32302f" },
   { name: "Stronger neutral (#3c3836)", value: "#3c3836" },
+  { name: "Warm brown (#3a332b)", value: "#3a332b" },
   { name: "Slightly darker (#161819)", value: "#161819" },
   { name: "Much darker (#121415)", value: "#121415" },
   { name: "Almost black (#0e0f10)", value: "#0e0f10" },
-  { name: "Warm brown (#3a332b)", value: "#3a332b" },
   { name: "Custom hex", value: CUSTOM_CHOICE },
 ] as const
 
@@ -291,6 +291,7 @@ export async function cmdInit(options: CmdInitOptions = {}): Promise<void> {
       const paneBgChoice = await ask(selectWithPreview<string>({
         message: "Pane tint color",
         previewLabel: "preview color",
+        previewOnHighlight: true,
         choices: ZELLIJ_PANE_BG_CHOICES.map((choice) => ({
           name: choice.name,
           value: choice.value,
@@ -311,7 +312,7 @@ export async function cmdInit(options: CmdInitOptions = {}): Promise<void> {
         },
       }))
 
-      if (paneBgChoice !== CUSTOM_CHOICE) {
+      {
         const paneIdStr = process.env.ZELLIJ_PANE_ID
         if (paneIdStr) {
           import("node:child_process").then(({ spawnSync }) => {
