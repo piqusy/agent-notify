@@ -17,6 +17,9 @@ vi.mock("@agent-notify/core", () => ({
 import { cmdPermission, cmdTest, cmdWorkingStart, cmdWorkingStop } from "../commands/notify.js"
 
 describe("notify CLI commands", () => {
+  const originalZellijSessionName = process.env.ZELLIJ_SESSION_NAME
+  const originalZellijPaneId = process.env.ZELLIJ_PANE_ID
+
   afterEach(() => {
     vi.restoreAllMocks()
     notifyMock.mockReset()
@@ -26,6 +29,8 @@ describe("notify CLI commands", () => {
     getCurrentTabInfoMock.mockResolvedValue(null)
     markPaneWorkingMock.mockReset()
     clearPaneWorkingMock.mockReset()
+    process.env.ZELLIJ_SESSION_NAME = originalZellijSessionName
+    process.env.ZELLIJ_PANE_ID = originalZellijPaneId
   })
 
   it("routes the permission command through trigger=permission", async () => {
@@ -57,20 +62,30 @@ describe("notify CLI commands", () => {
   })
 
   it("marks the current zellij pane as working", async () => {
+    process.env.ZELLIJ_SESSION_NAME = "test-session"
+    process.env.ZELLIJ_PANE_ID = "11"
     isZellijSessionMock.mockReturnValue(true)
     getCurrentTabInfoMock.mockResolvedValueOnce({ tabId: 7, tabName: "api" } as never)
 
     await cmdWorkingStart()
 
-    expect(markPaneWorkingMock).toHaveBeenCalledWith(7, "api", expect.objectContaining({ sessionName: expect.anything() }))
+    expect(markPaneWorkingMock).toHaveBeenCalledWith(7, "api", {
+      sessionName: "test-session",
+      originPaneId: 11,
+    })
   })
 
   it("clears the current zellij pane working indicator", async () => {
+    process.env.ZELLIJ_SESSION_NAME = "test-session"
+    process.env.ZELLIJ_PANE_ID = "11"
     isZellijSessionMock.mockReturnValue(true)
     getCurrentTabInfoMock.mockResolvedValueOnce({ tabId: 7, tabName: "api" } as never)
 
     await cmdWorkingStop()
 
-    expect(clearPaneWorkingMock).toHaveBeenCalledWith(7, expect.objectContaining({ sessionName: expect.anything() }))
+    expect(clearPaneWorkingMock).toHaveBeenCalledWith(7, {
+      sessionName: "test-session",
+      originPaneId: 11,
+    })
   })
 })
