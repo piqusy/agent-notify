@@ -10,7 +10,7 @@ const ZELLIJ_STATE_PREFIX = "agent-notify-zellij-state"
 const POLLER_PID_FILE = "poller.pid"
 
 const TAB_NOTIFY_PREFIX = " ● "
-const TAB_WORKING_PREFIX = " ◐ "
+const TAB_WORKING_PREFIX = " ⠋ "
 
 export type ZellijNotifyOptions = {
   sessionName?: string | null
