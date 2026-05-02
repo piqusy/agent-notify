@@ -134,6 +134,6 @@ describe("markTabNotified", () => {
     expect(args[1]).toContain("active=")
     expect(args[1]).toContain("current_name")
     expect(args[1]).toContain("restored_name")
-    expect(args[1]).toContain('case "$current_name" in')
+    expect(args[1]).toContain('while case "$restored_name" in')
   })
 })

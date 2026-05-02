@@ -86,7 +86,7 @@ while [ "$tries" -lt "$MAX" ]; do
       done
       
       # Strip Braille dots if they exist
-      for dot in "⠁" "⠂" "⠄" "⡀" "⢀" "⠠" "⠐" "⠈" "⣾" "⣽" "⣻" "⢿" "⡿" "⣟" "⣯" "⣷"; do
+      for dot in "⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏" "⠁" "⠂" "⠄" "⡀" "⢀" "⠠" "⠐" "⠈" "⣾" "⣽" "⣻" "⢿" "⡿" "⣟" "⣯" "⣷"; do
         while case "$restored_name" in " $dot "*) true ;; *) false ;; esac; do
           restored_name=\${restored_name#" $dot "}
         done
