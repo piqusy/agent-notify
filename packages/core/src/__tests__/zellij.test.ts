@@ -139,7 +139,7 @@ describe("markTabNotified", () => {
     expect(cmd).toBe("sh")
     expect(args).toEqual(["-c", expect.stringContaining("run_zellij()")])
     expect(opts.env.ATTENTION_PREFIX).toBe(" ● ")
-    expect(opts.env.WORKING_PREFIX).toBe(" ◐ ")
+    expect(opts.env.WORKING_PREFIX).toBe(" ○ ")
     expect(opts.env.SESSION_NAME).toBe("test-session")
     expect(opts.env.STATE_DIR).toContain("agent-notify-zellij-state-test-session")
     expect(opts.env.PID_FILE).toContain("poller.pid")
@@ -165,6 +165,6 @@ describe("markTabNotified", () => {
     expect(spawnMock).toHaveBeenCalled()
     const [, args, opts] = spawnMock.mock.calls[0] as any
     expect(args[1]).toContain("WORKING_PREFIX")
-    expect(opts.env.WORKING_PREFIX).toBe(" ◐ ")
+    expect(opts.env.WORKING_PREFIX).toBe(" ○ ")
   })
 })

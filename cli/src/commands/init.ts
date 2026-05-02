@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process"
+import { execSync, spawnSync } from "node:child_process"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import {
@@ -66,6 +66,24 @@ const ZELLIJ_PANE_BG_CHOICES = [
 
 function isHexColor(value: string): boolean {
   return /^#[0-9a-fA-F]{6}$/.test(value)
+}
+
+function previewPaneTint(bg: string): void {
+  const paneIdStr = process.env.ZELLIJ_PANE_ID
+  if (!paneIdStr) return
+
+  spawnSync("zellij", ["action", "set-pane-color", "--pane-id", paneIdStr, "--bg", bg], {
+    stdio: "ignore",
+  })
+}
+
+function clearPreviewPaneTint(): void {
+  const paneIdStr = process.env.ZELLIJ_PANE_ID
+  if (!paneIdStr) return
+
+  spawnSync("zellij", ["action", "clear-pane-color", "--pane-id", paneIdStr], {
+    stdio: "ignore",
+  })
 }
 
 export function getTerminalChoices(detectedTerminal: string | null): Array<{ name: string; value: SelectChoiceValue }> {
@@ -301,27 +319,11 @@ export async function cmdInit(options: CmdInitOptions = {}): Promise<void> {
           : CUSTOM_CHOICE,
         onPreview: (color) => {
           if (!color || color === CUSTOM_CHOICE) return
-          const paneIdStr = process.env.ZELLIJ_PANE_ID
-          if (paneIdStr) {
-            import("node:child_process").then(({ spawnSync }) => {
-              spawnSync("zellij", ["action", "set-pane-color", "--pane-id", paneIdStr, "--bg", color], {
-                stdio: "ignore",
-              })
-            })
-          }
+          previewPaneTint(color)
         },
       }))
 
-      {
-        const paneIdStr = process.env.ZELLIJ_PANE_ID
-        if (paneIdStr) {
-          import("node:child_process").then(({ spawnSync }) => {
-            spawnSync("zellij", ["action", "clear-pane-color", "--pane-id", paneIdStr], {
-              stdio: "ignore",
-            })
-          })
-        }
-      }
+      clearPreviewPaneTint()
 
       const paneBg = paneBgChoice === CUSTOM_CHOICE
         ? await ask(input({

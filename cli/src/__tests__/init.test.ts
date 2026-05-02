@@ -57,6 +57,7 @@ const mockState = vi.hoisted(() => ({
 
 vi.mock("node:child_process", () => ({
   execSync: vi.fn(() => "14.0\n"),
+  spawnSync: vi.fn(() => ({ status: 0 })),
 }))
 
 vi.mock("@agent-notify/core", () => ({
