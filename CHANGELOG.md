@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.2.7] — 2026-05-02
+
+### Added
+- New live Zellij pane tint preview in `agent-notify init`, so moving through pane color options updates the pane tint immediately during setup
+- Additional darker pane tint presets in the setup wizard, including `#161819`, `#121415`, and `#0e0f10`
+
+### Changed
+- Zellij working-state tab indicator now uses a hollow circle (`○`) instead of the previous half-circle glyph
+- The pane tint picker now shows a color-specific preview hint and keeps the preset order tuned, with Warm Brown surfaced earlier in the list
+
 ## [0.2.6] — 2026-04-28
 
 ### Added
