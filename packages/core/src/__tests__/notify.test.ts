@@ -14,7 +14,7 @@ vi.mock("../config.js", () => ({
       sounds: { done: null, question: null, permission: null },
       backend: null,
       zellij: {
-        tabIndicator: { enabled: true, prefix: " ● " },
+        tabIndicator: { enabled: true, prefix: " ● ", workingPrefix: " ○ " },
         paneIndicator: { enabled: false, mode: "background", bg: "#3c3836", clearOn: "origin-pane-focus" },
       },
     },
@@ -139,7 +139,7 @@ describe("notify integration (skip in CI — uses real config/fs)", () => {
         sounds: { done: null, question: null, permission: null },
         backend: null,
         zellij: {
-          tabIndicator: { enabled: true, prefix: " ● " },
+          tabIndicator: { enabled: true, prefix: " ● ", workingPrefix: " ○ " },
           paneIndicator: { enabled: false, mode: "background", bg: "#3c3836", clearOn: "origin-pane-focus" },
         },
       },
@@ -169,7 +169,7 @@ describe("notify integration (skip in CI — uses real config/fs)", () => {
         sounds: { done: null, question: null, permission: null },
         backend: null,
         zellij: {
-          tabIndicator: { enabled: true, prefix: " ● " },
+          tabIndicator: { enabled: true, prefix: " ● ", workingPrefix: " ○ " },
           paneIndicator: { enabled: false, mode: "background", bg: "#3c3836", clearOn: "origin-pane-focus" },
         },
       },
@@ -225,7 +225,7 @@ describe("notify integration (skip in CI — uses real config/fs)", () => {
         sounds: { done: null, question: null, permission: null },
         backend: null,
         zellij: {
-          tabIndicator: { enabled: true, prefix: " ● " },
+          tabIndicator: { enabled: true, prefix: " ● ", workingPrefix: " ○ " },
           paneIndicator: { enabled: false, mode: "background", bg: "#3c3836", clearOn: "origin-pane-focus" },
         },
       },

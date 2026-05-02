@@ -14,7 +14,7 @@ const mockState = vi.hoisted(() => ({
     backend: null,
     clickRestore: { enabled: false },
     zellij: {
-      tabIndicator: { enabled: true, prefix: " ● " },
+      tabIndicator: { enabled: true, prefix: " ● ", workingPrefix: " ○ " },
       paneIndicator: { enabled: false, mode: "background", bg: "#3c3836", clearOn: "origin-pane-focus" },
     },
   },
@@ -157,7 +157,7 @@ describe("cmdInit", () => {
       backend: "notify-send",
       clickRestore: { enabled: true },
       zellij: {
-        tabIndicator: { enabled: true, prefix: " ● " },
+        tabIndicator: { enabled: true, prefix: " ● ", workingPrefix: " ○ " },
         paneIndicator: { enabled: true, mode: "background", bg: "#123456", clearOn: "origin-pane-focus" },
       },
     }

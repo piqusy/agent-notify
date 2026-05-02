@@ -17,7 +17,7 @@ const mockConfig: Config = {
   sounds: { done: "Morse", question: "Submarine", permission: null },
   events: { done: true, question: true, permission: true },
   zellij: {
-    tabIndicator: { enabled: true, prefix: " ● " },
+    tabIndicator: { enabled: true, prefix: " ● ", workingPrefix: " ○ " },
     paneIndicator: { enabled: false, mode: "background", bg: "#3c3836", clearOn: "origin-pane-focus" },
   },
 };
