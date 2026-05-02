@@ -31,6 +31,7 @@ export const defaultConfig: Config = {
     tabIndicator: {
       enabled: true,
       prefix: " ● ",
+      workingPrefix: " ○ ",
     },
     paneIndicator: {
       enabled: false,
@@ -192,6 +193,13 @@ function validateConfig(raw: unknown): { config: Config; issues: ConfigValidatio
               config.zellij.tabIndicator.prefix = tabIndicator.prefix
             } else {
               issues.push(issue("zellij.tabIndicator.prefix", "Expected a string"))
+            }
+          }
+          if ("workingPrefix" in tabIndicator) {
+            if (typeof tabIndicator.workingPrefix === "string") {
+              config.zellij.tabIndicator.workingPrefix = tabIndicator.workingPrefix
+            } else {
+              issues.push(issue("zellij.tabIndicator.workingPrefix", "Expected a string"))
             }
           }
         } else {

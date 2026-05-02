@@ -10,7 +10,7 @@ const ZELLIJ_STATE_PREFIX = "agent-notify-zellij-state"
 const POLLER_PID_FILE = "poller.pid"
 
 const TAB_NOTIFY_PREFIX = " ● "
-const TAB_WORKING_PREFIX = " ⠋ "
+const TAB_WORKING_PREFIX = " ○ "
 
 export type ZellijNotifyOptions = {
   sessionName?: string | null
@@ -63,7 +63,7 @@ function stripKnownTabPrefixes(tabName: string, prefixes: string[]): string {
     }
   }
 
-  return tabName.replace(/^\s*[●◐]\s*/, "")
+  return tabName.replace(/^\s*[●○]\s*/, "")
 }
 
 function scrubbedZellijEnv(extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
@@ -209,7 +209,7 @@ strip_prefix() {
   case "$name" in
     "$ATTENTION_PREFIX"*) printf '%s' "\${name#"$ATTENTION_PREFIX"}" ;;
     "$WORKING_PREFIX"*) printf '%s' "\${name#"$WORKING_PREFIX"}" ;;
-    *) printf '%s' "$name" | sed -E 's/^[[:space:]]*[●◐][[:space:]]*//' ;;
+    *) printf '%s' "$name" | sed -E 's/^[[:space:]]*[●○][[:space:]]*//' ;;
   esac
 }
 rename_tab_for_state() {
