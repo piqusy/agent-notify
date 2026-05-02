@@ -1,11 +1,11 @@
 import { execSync } from "node:child_process"
 import * as path from "node:path"
-import type { Config, NotifyPayload, NotifyResult, QuietHours } from "./types.js"
+import type { Config, NotifyPayload, NotifyResult, QuietHours, NotifyTrigger } from "./types.js"
 import type { NotifyInput } from "./types.js"
-import { loadConfig } from "./config.js"
+import { loadConfigResult } from "./config.js"
 import { checkAndUpdateCooldown, cooldownFilePath } from "./cooldown.js"
-import { isTerminalFocused, resolveTerminalApp } from "./focus.js"
-import { isZellijSession, isPaneTabActive, getCurrentTabInfo, markTabNotified } from "./zellij.js"
+import { isTerminalFocused, resolveTerminal } from "./focus.js"
+import { isZellijSession, isPaneTabActive, getCurrentTabInfo, markTabNotified, clearPaneWorking } from "./zellij.js"
 import { resolveSound } from "./sounds.js"
 import { sendNotification } from "./platform/index.js"
 
@@ -37,8 +37,72 @@ function getGitBranch(cwd: string): string | null {
   }
 }
 
+function normalizeTabName(tabName: string, tabPrefix: string): string {
+  if (tabName.startsWith(tabPrefix)) {
+    return tabName.slice(tabPrefix.length).trim()
+  }
+
+  return tabName.replace(/^\s*[●◐]\s*/, "").trim()
+}
+
+function envFlagEnabled(name: string): boolean {
+  const value = process.env[name]?.trim().toLowerCase()
+  return value === "1" || value === "true" || value === "yes" || value === "on"
+}
+
+function parsePositiveIntEnv(name: string): number | undefined {
+  const value = process.env[name]?.trim()
+  if (!value) return undefined
+
+  const parsed = Number.parseInt(value, 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
+}
+
+function buildKittyClickTarget(): { windowId?: number; listenOn?: string } | undefined {
+  const windowId = parsePositiveIntEnv("KITTY_WINDOW_ID")
+  const listenOn = process.env.KITTY_LISTEN_ON?.trim()
+
+  if (windowId === undefined && !listenOn) return undefined
+
+  return {
+    ...(windowId !== undefined ? { windowId } : {}),
+    ...(listenOn ? { listenOn } : {}),
+  }
+}
+
+const warnedConfigPaths = new Set<string>()
+
+function warnOnInvalidConfig(path: string, summary: string): void {
+  if (warnedConfigPaths.has(path)) return
+  warnedConfigPaths.add(path)
+  console.error(`[agent-notify] Config warning: ${summary}. Run "agent-notify doctor" for details.`)
+}
+
 export async function notify(input: NotifyInput): Promise<NotifyResult> {
-  const config: Config = await loadConfig()
+  const configResult = await loadConfigResult()
+  const config: Config = configResult.config
+
+  if (configResult.status === "invalid-json") {
+    warnOnInvalidConfig(configResult.path, `${configResult.issues[0]?.message ?? "Invalid config"} in ${configResult.path}; using defaults`)
+  } else if (configResult.status === "invalid-fields") {
+    warnOnInvalidConfig(configResult.path, `${configResult.issues.length} invalid config setting${configResult.issues.length === 1 ? "" : "s"} in ${configResult.path}; invalid fields reset to defaults`)
+  }
+  const resolvedTerminal = resolveTerminal({
+    configOverride: config.terminalApp,
+    env: process.env,
+    termProgram: process.env.TERM_PROGRAM ?? "",
+  })
+  const terminalApp = resolvedTerminal?.displayName ?? null
+  const zellijSession = isZellijSession()
+  const tabInfo = zellijSession ? await getCurrentTabInfo() : null
+
+  if (tabInfo) {
+    clearPaneWorking(tabInfo.tabId, {
+      sessionName: process.env.ZELLIJ_SESSION_NAME ?? null,
+      originPaneId: Number.parseInt(process.env.ZELLIJ_PANE_ID ?? "", 10),
+      tabIndicator: config.zellij.tabIndicator,
+    })
+  }
 
   // 1. Event filter — use trigger if provided, otherwise fall back to state
   const eventKey = input.trigger ?? input.state
@@ -46,9 +110,8 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
 
   // 2. Focus check — auto-detect terminal when terminalApp is null
   if (!input.skipFocusCheck && !input.force) {
-    const termApp = config.terminalApp ?? resolveTerminalApp(process.env.TERM_PROGRAM ?? "")
-    if (termApp !== null && await isTerminalFocused(termApp)) {
-      if (isZellijSession()) {
+    if (resolvedTerminal !== null && await isTerminalFocused(resolvedTerminal)) {
+      if (zellijSession) {
         // Inside Zellij: only suppress if our tab is the active (visible) one
         if (await isPaneTabActive()) return { sent: false, reason: "terminal-focused" }
         // Tab not active — user is on a different tab, so notify
@@ -64,10 +127,12 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
   const shouldProceed = input.force || await checkAndUpdateCooldown(file, config.cooldownSeconds)
   if (!shouldProceed) return { sent: false, reason: "cooldown" }
 
-  // 4. Git context
+  // 4. Git + tab context
   const cwd = input.cwd ?? process.cwd()
   const project = path.basename(cwd)
   const branch = getGitBranch(cwd)
+  const tabPrefix = config.zellij.tabIndicator.prefix
+  const tabName = tabInfo ? normalizeTabName(tabInfo.tabName, tabPrefix) : project
 
   // 5. Build payload
   const TOOL_DISPLAY_NAMES: Record<string, string> = {
@@ -77,11 +142,19 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
     "pi-coding-agent": "Pi",
     test: "Test",
   }
+  const EVENT_LABELS: Record<NotifyTrigger, string> = {
+    done: "Done",
+    question: "Question",
+    permission: "Permission",
+  }
   const displayName = TOOL_DISPLAY_NAMES[input.tool]
     ?? input.tool.charAt(0).toUpperCase() + input.tool.slice(1)
-  const stateLabel = input.state === "done" ? "Done" : "Question"
-  const title = `${displayName} — ${stateLabel}`
-  const body = branch ? `${project} · ${branch}` : project
+  const eventLabel = EVENT_LABELS[input.trigger ?? input.state]
+  const title = `${displayName} — ${eventLabel}`
+  const body = [
+    `▣  ${tabName}`,
+    `⎇  ${branch ?? "—"}`,
+  ].join("\n")
 
   const sound = isQuietHour(config.quietHours)
     ? undefined
@@ -94,18 +167,47 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
         return resolveSound(soundKey) ?? undefined
       })()
 
+  const clickRestoreEnabled = config.clickRestore.enabled || envFlagEnabled("AGENT_NOTIFY_CLICK_SPIKE")
   const payload: NotifyPayload = {
     title,
     body,
     ...(sound ? { sound } : {}),
+    ...(clickRestoreEnabled ? {
+      clickTarget: {
+        issuedAt: Math.floor(Date.now() / 1000),
+        ...(terminalApp !== null ? { terminalApp } : {}),
+        ...(resolvedTerminal ? {
+          terminal: {
+            ...(resolvedTerminal.id !== null ? { id: resolvedTerminal.id } : {}),
+            displayName: resolvedTerminal.displayName,
+            ...(resolvedTerminal.bundleId !== null ? { bundleId: resolvedTerminal.bundleId } : {}),
+            ...(() => {
+              if (resolvedTerminal.id !== "kitty") return {}
+              const kitty = buildKittyClickTarget()
+              return kitty ? { kitty } : {}
+            })(),
+          },
+        } : {}),
+        ...(tabInfo || process.env.ZELLIJ_SESSION_NAME ? {
+          zellij: {
+            sessionName: process.env.ZELLIJ_SESSION_NAME ?? null,
+            tabId: tabInfo?.tabId ?? null,
+            tabName,
+          },
+        } : {}),
+      },
+      macosHelperKeepAliveSeconds: parsePositiveIntEnv("AGENT_NOTIFY_CLICK_SPIKE_KEEP_ALIVE_SECONDS") ?? 120,
+    } : {}),
   }
 
-  // 6. Zellij tab icon — mark the background tab before macOS notification shows
-  if (isZellijSession()) {
-    const tabInfo = await getCurrentTabInfo()
-    if (tabInfo && !tabInfo.tabName.startsWith(" ●")) {
-      markTabNotified(tabInfo.tabId, tabInfo.tabName)
-    }
+  // 6. Zellij tab/pane indicators — mark the background tab before macOS notification shows
+  if (tabInfo) {
+    markTabNotified(tabInfo.tabId, tabInfo.tabName, {
+      sessionName: process.env.ZELLIJ_SESSION_NAME ?? null,
+      originPaneId: Number.parseInt(process.env.ZELLIJ_PANE_ID ?? "", 10),
+      tabIndicator: config.zellij.tabIndicator,
+      paneIndicator: config.zellij.paneIndicator,
+    })
   }
 
   // 7. Send

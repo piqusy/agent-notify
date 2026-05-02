@@ -1,13 +1,23 @@
 import { describe, it, expect, vi, afterEach } from "vitest"
 
 vi.mock("../config.js", () => ({
-  loadConfig: vi.fn(async () => ({
-    events: { done: true, question: true, permission: true },
-    terminalApp: null,
-    cooldownSeconds: 0,
-    quietHours: null,
-    sounds: { done: null, question: null, permission: null },
-    backend: null,
+  loadConfigResult: vi.fn(async () => ({
+    path: "/tmp/agent-notify-test-config.json",
+    status: "ok",
+    issues: [],
+    config: {
+      events: { done: true, question: true, permission: true },
+      terminalApp: null,
+      clickRestore: { enabled: false },
+      cooldownSeconds: 0,
+      quietHours: null,
+      sounds: { done: null, question: null, permission: null },
+      backend: null,
+      zellij: {
+        tabIndicator: { enabled: true, prefix: " ● " },
+        paneIndicator: { enabled: false, mode: "background", bg: "#3c3836", clearOn: "origin-pane-focus" },
+      },
+    },
   })),
 }))
 
@@ -18,7 +28,7 @@ vi.mock("../cooldown.js", () => ({
 
 vi.mock("../focus.js", () => ({
   isTerminalFocused: vi.fn(async () => false),
-  resolveTerminalApp: vi.fn(() => null),
+  resolveTerminal: vi.fn(() => null),
 }))
 
 import { isQuietHour, notify } from "../notify.js"
@@ -62,6 +72,10 @@ describe("isQuietHour", () => {
 
 describe("notify integration (skip in CI — uses real config/fs)", () => {
   afterEach(() => {
+    delete process.env.AGENT_NOTIFY_CLICK_SPIKE
+    delete process.env.AGENT_NOTIFY_CLICK_SPIKE_KEEP_ALIVE_SECONDS
+    delete process.env.KITTY_WINDOW_ID
+    delete process.env.KITTY_LISTEN_ON
     vi.restoreAllMocks()
   })
 
@@ -86,12 +100,157 @@ describe("notify integration (skip in CI — uses real config/fs)", () => {
   })
 
   it("uses friendly display names for supported tools", async () => {
+    vi.spyOn(zellij, "isZellijSession").mockReturnValue(false)
     const sendNotification = vi.spyOn(platform, "sendNotification").mockResolvedValue(undefined)
 
     await notify({ state: "done", tool: "pi-coding-agent", cwd: process.cwd() })
 
     expect(sendNotification).toHaveBeenCalledWith(
       expect.objectContaining({ title: "Pi — Done" }),
+      expect.anything(),
+    )
+  })
+
+  it("uses a distinct Permission title when trigger=permission", async () => {
+    vi.spyOn(zellij, "isZellijSession").mockReturnValue(false)
+    const sendNotification = vi.spyOn(platform, "sendNotification").mockResolvedValue(undefined)
+
+    await notify({ state: "question", trigger: "permission", tool: "claude-code", cwd: process.cwd() })
+
+    expect(sendNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Claude Code — Permission" }),
+      expect.anything(),
+    )
+  })
+
+  it("checks the permission event toggle instead of question when trigger=permission", async () => {
+    vi.spyOn(zellij, "isZellijSession").mockReturnValue(false)
+    const { loadConfigResult } = await import("../config.js")
+    vi.mocked(loadConfigResult).mockResolvedValueOnce({
+      path: "/tmp/agent-notify-test-config.json",
+      status: "ok",
+      issues: [],
+      config: {
+        events: { done: true, question: true, permission: false },
+        terminalApp: null,
+        clickRestore: { enabled: false },
+        cooldownSeconds: 0,
+        quietHours: null,
+        sounds: { done: null, question: null, permission: null },
+        backend: null,
+        zellij: {
+          tabIndicator: { enabled: true, prefix: " ● " },
+          paneIndicator: { enabled: false, mode: "background", bg: "#3c3836", clearOn: "origin-pane-focus" },
+        },
+      },
+    })
+
+    const sendNotification = vi.spyOn(platform, "sendNotification").mockResolvedValue(undefined)
+    const result = await notify({ state: "question", trigger: "permission", tool: "opencode", cwd: process.cwd() })
+
+    expect(result).toEqual({ sent: false, reason: "event-disabled" })
+    expect(sendNotification).not.toHaveBeenCalled()
+  })
+
+  it("attaches click restore metadata when enabled in config", async () => {
+    process.env.AGENT_NOTIFY_CLICK_SPIKE_KEEP_ALIVE_SECONDS = "45"
+
+    const { loadConfigResult } = await import("../config.js")
+    vi.mocked(loadConfigResult).mockResolvedValueOnce({
+      path: "/tmp/agent-notify-test-config.json",
+      status: "ok",
+      issues: [],
+      config: {
+        events: { done: true, question: true, permission: true },
+        terminalApp: null,
+        clickRestore: { enabled: true },
+        cooldownSeconds: 0,
+        quietHours: null,
+        sounds: { done: null, question: null, permission: null },
+        backend: null,
+        zellij: {
+          tabIndicator: { enabled: true, prefix: " ● " },
+          paneIndicator: { enabled: false, mode: "background", bg: "#3c3836", clearOn: "origin-pane-focus" },
+        },
+      },
+    })
+
+    vi.spyOn(zellij, "isZellijSession").mockReturnValue(true)
+    vi.spyOn(zellij, "isPaneTabActive").mockResolvedValue(false)
+    vi.spyOn(zellij, "getCurrentTabInfo").mockResolvedValue({ tabId: 12, tabName: " ● api" })
+    vi.spyOn(zellij, "markTabNotified").mockImplementation(() => undefined)
+    const sendNotification = vi.spyOn(platform, "sendNotification").mockResolvedValue(undefined)
+
+    await notify({ state: "done", tool: "test", cwd: "/tmp/project" })
+
+    expect(sendNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clickTarget: expect.objectContaining({
+          issuedAt: expect.any(Number),
+          zellij: expect.objectContaining({
+            tabId: 12,
+            tabName: "api",
+          }),
+        }),
+        macosHelperKeepAliveSeconds: 45,
+      }),
+      expect.anything(),
+    )
+  })
+
+  it("attaches canonical terminal metadata to the click payload when known", async () => {
+    process.env.KITTY_WINDOW_ID = "23"
+    process.env.KITTY_LISTEN_ON = "unix:/tmp/kitty-test"
+
+    const focus = await import("../focus.js")
+    vi.mocked(focus.resolveTerminal).mockReturnValueOnce({
+      id: "kitty",
+      displayName: "kitty",
+      bundleId: "net.kovidgoyal.kitty",
+      source: "env",
+      reason: "KITTY_WINDOW_ID",
+    })
+
+    const { loadConfigResult } = await import("../config.js")
+    vi.mocked(loadConfigResult).mockResolvedValueOnce({
+      path: "/tmp/agent-notify-test-config.json",
+      status: "ok",
+      issues: [],
+      config: {
+        events: { done: true, question: true, permission: true },
+        terminalApp: null,
+        clickRestore: { enabled: true },
+        cooldownSeconds: 0,
+        quietHours: null,
+        sounds: { done: null, question: null, permission: null },
+        backend: null,
+        zellij: {
+          tabIndicator: { enabled: true, prefix: " ● " },
+          paneIndicator: { enabled: false, mode: "background", bg: "#3c3836", clearOn: "origin-pane-focus" },
+        },
+      },
+    })
+
+    vi.spyOn(zellij, "isZellijSession").mockReturnValue(false)
+    const sendNotification = vi.spyOn(platform, "sendNotification").mockResolvedValue(undefined)
+
+    await notify({ state: "done", tool: "test", cwd: "/tmp/project" })
+
+    expect(sendNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clickTarget: expect.objectContaining({
+          terminalApp: "kitty",
+          terminal: {
+            id: "kitty",
+            displayName: "kitty",
+            bundleId: "net.kovidgoyal.kitty",
+            kitty: {
+              windowId: 23,
+              listenOn: "unix:/tmp/kitty-test",
+            },
+          },
+        }),
+      }),
       expect.anything(),
     )
   })

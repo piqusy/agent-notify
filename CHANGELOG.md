@@ -1,5 +1,160 @@
 # Changelog
 
+## [0.2.6] — 2026-04-28
+
+### Added
+- New Zellij working-state tab indicator (`◐`) with per-pane tracking and correct precedence behind attention indicators, plus CLI `working-start` / `working-stop` commands
+- Pi integration now marks the current Zellij pane as working on `agent_start` and clears it on `agent_end`
+
+### Changed
+- macOS focus suppression now prefers frontmost-app bundle IDs, using `lsappinfo` before AppleScript fallbacks, which fixes Warp frontmost detection in practice
+
+## [0.2.5] — 2026-04-28
+
+### Added
+- Kitty click-to-restore payloads now carry best-effort Kitty remote-control metadata (`KITTY_WINDOW_ID`, `KITTY_LISTEN_ON`) when available, so the macOS helper can target the originating Kitty window
+
+### Changed
+- The macOS helper now attempts Kitty-specific window restore before generic app activation, while keeping the existing Zellij restore path for Kitty + Zellij sessions
+- README now documents that exact Kitty restore is best-effort and depends on Kitty remote control being addressable
+
+## [0.2.4] — 2026-04-28
+
+### Changed
+- Homebrew tap publishing now keeps only the rolling `agent-notify` formula instead of creating patch-specific `agent-notify@x.y.z` entries for every release
+- Release docs and GitHub Release notes now direct exact historical version installs to GitHub release assets instead of Homebrew patch formulas
+
+## [0.2.3] — 2026-04-28
+
+### Added
+- Registry-based terminal detection with strong env markers, canonical terminal identities, and broader support for iTerm2, Terminal, Warp, kitty, WezTerm, Hyper, Ghostty, Alacritty, VS Code, GNOME Terminal, Konsole, foot, Rio, and Tabby
+
+### Changed
+- macOS terminal auto-detection now falls back to the parent process tree when env-based detection does not identify the terminal
+- `agent-notify status`, `agent-notify doctor`, and `agent-notify init` now report the detected terminal and detection reason/source instead of relying on `$TERM_PROGRAM` alone
+- macOS click-to-restore payloads now include canonical terminal metadata, and the helper now prefers bundle-id or running-app activation before name-based fallback
+
+## [0.2.2] — 2026-04-28
+
+### Added
+- New combined GitHub issue template for Linux/Windows standalone binary reports, collecting environment details and diagnostic output needed for cross-platform triage
+
+### Changed
+- macOS helper discovery now verifies the expected bundle structure and bundle identifier before trusting a helper app candidate
+- Installer asset resolution now validates bundled integration files before copying them into user-owned locations
+
+## [0.2.1] — 2026-04-28
+
+### Added
+- Release smoke tests now verify the Linux `notify-send` and Windows PowerShell backend command paths from the shipped binaries before publishing
+
+### Changed
+- Windows standalone install docs now cover zip extraction, PATH/manual launch, BurntToast setup, and fallback behavior more explicitly
+
+## [0.2.0] — 2026-04-28
+
+### Added
+- Standalone release binaries are now published for Linux (`x64`, `arm64`) and Windows (`x64`) in addition to the existing macOS archives
+
+### Changed
+- GitHub Release packaging now uploads multi-platform archives and checksums, while keeping the existing Homebrew/macOS release flow unchanged
+
+## [0.1.50] — 2026-04-28
+
+### Added
+- CI now runs on both `ubuntu-latest` and `macos-latest`, so the macOS helper build path is exercised on every push and pull request instead of only during release builds
+
+### Changed
+- The workspace root `package.json` is now the canonical version source, with `bun run sync:version` updating all package versions and the generated CLI version constant from one place
+
+## [0.1.49] — 2026-04-28
+
+### Added
+- New `agent-notify status` command plus `agent-notify explain` alias to show whether `done`, `question`, and `permission` notifications would send right now, including backend, focus, quiet-hours, and cooldown state
+
+## [0.1.48] — 2026-04-28
+
+### Changed
+- Config loading now validates JSON structure and field values, reports exact problems via `agent-notify doctor`, and falls back only for invalid settings instead of silently resetting the whole config
+
+## [0.1.47] — 2026-04-28
+
+### Added
+- First-class `permission` notifications in the CLI via `agent-notify permission`, including distinct Permission titles and test-mode support
+
+### Changed
+- Claude Code `PermissionRequest` hooks now emit `permission` notifications instead of reusing `question`
+
+## [0.1.46] — 2026-04-28
+
+### Added
+- Optional macOS click-to-restore for native helper notifications, with terminal foregrounding and Zellij tab/session restore when clicking a notification
+- `clickRestore.enabled` in config plus a setup-wizard toggle to enable or disable click-to-restore explicitly
+
+### Fixed
+- Harden macOS click-to-restore by trusting only fixed absolute `zellij` locations, rejecting stale notification clicks older than five minutes, and reducing sensitive click payload/logging data
+
+## [0.1.45] — 2026-04-27
+
+### Fixed
+- Pi no longer sends false-positive notifications for aborted or errored runs, and it now only classifies the final assistant message instead of falling back to older assistant text
+
+### Added
+- Pi can now log raw `agent_end` payloads to `AGENT_NOTIFY_PI_DEBUG_LOG` for field verification while debugging notification classification issues
+
+## [0.1.44] — 2026-04-27
+
+### Fixed
+- The Release workflow now explicitly dispatches the separate Homebrew Tap workflow after publishing the GitHub Release, so automatic tap updates no longer depend on `release.published` events triggered by `GITHUB_TOKEN`
+- Homebrew publishing remains a separate workflow, but now runs reliably for new releases while still supporting manual tag-based reruns
+
+## [0.1.43] — 2026-04-27
+
+### Changed
+- Release automation now separates GitHub Release publishing from Homebrew tap publishing, with manual tag-based reruns for both workflows
+
+### Fixed
+- Release and Homebrew reruns now work against existing tags by checking the target tag into a separate directory while keeping helper scripts from the current workflow branch
+- Homebrew tap publishing now requires pinned `release` environment secrets and no longer falls back to runtime `ssh-keyscan` host trust
+- CI now validates release files on every push and pull request to catch version/changelog drift earlier
+
+## [0.1.42] — 2026-04-26
+
+### Added
+- `agent-notify config edit` as an explicit alias for reopening the interactive setup wizard to update an existing config
+
+### Changed
+- `agent-notify init` now prepopulates all prompts from the existing config instead of resetting most fields back to built-in defaults when rerun
+
+### Fixed
+- Re-running the setup wizard now preserves existing backend, terminal app, quiet hours, sounds, events, cooldown, and Zellij settings unless you actively change them
+
+## [0.1.41] — 2026-04-26
+
+### Changed
+- `agent-notify init` now exposes a compact Zellij indicator section with modes for tab-only, tab + pane tint, or disabled, plus pane tint color selection when enabled
+
+### Fixed
+- Zellij session pollers no longer time out after five minutes, so tab badges and pane indicators continue clearing correctly even if you return to the pane much later
+- Pane indicator config is now bg-only, removing the unused foreground override from the public config surface
+
+## [0.1.40] — 2026-04-26
+
+### Added
+- Optional configurable Zellij pane background indicators with exact origin-pane tracking, so the triggering pane can stay marked until it is focused again
+
+### Changed
+- Notification bodies now use separate compact context rows for tab/project (`▣`) and Git branch (`⎇`) instead of a single combined project/branch line
+
+### Fixed
+- Zellij notification state now tracks pending panes per tab, so tab badges only clear after all pending panes in that tab are resolved and pane indicators clear only when the exact origin pane is focused
+- macOS `osascript` fallback now preserves multiline notification bodies so compact context rows render correctly when the native helper is unavailable
+
+## [0.1.39] — 2026-04-26
+
+### Fixed
+- Make Zellij badge cleanup query live client pane-to-tab mapping with a scrubbed environment and explicit session targeting, so `●` clears reliably when returning to a badged tab
+
 ## [0.1.38] — 2026-04-26
 
 ### Fixed

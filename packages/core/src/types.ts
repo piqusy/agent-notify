@@ -1,4 +1,5 @@
 export type NotifyState = "done" | "question"
+export type NotifyTrigger = NotifyState | "permission"
 
 export type NotifyBackend = "macos-helper" | "osascript" | "notify-send" | "powershell"
 
@@ -19,6 +20,27 @@ export interface EventFilter {
   permission: boolean
 }
 
+export interface ZellijTabIndicatorConfig {
+  enabled: boolean
+  prefix: string
+}
+
+export interface ZellijPaneIndicatorConfig {
+  enabled: boolean
+  mode: "background"
+  bg: string | null
+  clearOn: "origin-pane-focus"
+}
+
+export interface ZellijConfig {
+  tabIndicator: ZellijTabIndicatorConfig
+  paneIndicator: ZellijPaneIndicatorConfig
+}
+
+export interface ClickRestoreConfig {
+  enabled: boolean
+}
+
 export interface Config {
   cooldownSeconds: number
   quietHours:      QuietHours | null   // null = quiet hours disabled entirely
@@ -26,17 +48,44 @@ export interface Config {
   events:          EventFilter
   terminalApp:     string | null   // null = auto-detect via TERM_PROGRAM
   backend:         NotifyBackend | null   // null = auto-detect
+  clickRestore:    ClickRestoreConfig
+  zellij:          ZellijConfig
+}
+
+export interface KittyClickTarget {
+  windowId?: number | null
+  listenOn?: string | null
+}
+
+export interface NotificationClickTerminalTarget {
+  id?: string | null
+  displayName?: string | null
+  bundleId?: string | null
+  kitty?: KittyClickTarget
+}
+
+export interface NotificationClickTarget {
+  issuedAt?: number
+  terminalApp?: string | null
+  terminal?: NotificationClickTerminalTarget
+  zellij?: {
+    sessionName?: string | null
+    tabId?: number | null
+    tabName?: string | null
+  }
 }
 
 export interface NotifyPayload {
   title: string
   body:  string
   sound?: string
+  clickTarget?: NotificationClickTarget
+  macosHelperKeepAliveSeconds?: number
 }
 
 export interface NotifyInput {
   state:            NotifyState
-  trigger?:         "done" | "question" | "permission"  // if omitted, falls back to state
+  trigger?:         NotifyTrigger  // if omitted, falls back to state
   tool:             string
   cwd?:             string
   skipFocusCheck?:  boolean   // when true, bypasses the terminal-focused suppression

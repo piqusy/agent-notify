@@ -2,21 +2,33 @@
 
 Desktop notifications for AI coding agents — get notified when [Claude Code](https://claude.ai/code), [OpenCode](https://opencode.ai), or [Pi](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) finishes a task or needs your attention.
 
+`agent-notify` is **macOS-first**, with **basic notification support on Linux and Windows** plus downloadable standalone binaries for those platforms.
+
 ## Why
 
-AI agents can take minutes on complex tasks. Instead of watching the terminal, you get a native macOS notification the moment your attention is needed — with a distinct sound per event type and smart suppression when you're already at the keyboard.
+AI agents can take minutes on complex tasks. Instead of watching the terminal, you get a desktop notification the moment your attention is needed — with a distinct sound per event type and smart suppression when you're already at the keyboard. On macOS, this uses a bundled native helper for the best experience.
 
 ## Features
 
 - Native macOS notifications via a bundled helper app
-- Three event types: **done**, **question**, **permission request**
+- Basic Linux support via `notify-send`
+- Basic Windows support via PowerShell / BurntToast fallback
+- Three event types: **done**, **question**, and **permission**
+- Compact context rows in the notification body for the current tab/project and Git branch
 - Configurable sound per event (with live preview in the setup wizard)
 - Bundled Agent Notify app icon on macOS
 - Quiet hours
 - Cooldown to avoid notification spam
 - Focus detection — skips notification if your terminal is already in focus
+- Optional macOS click-to-restore for the terminal app and Zellij tab
 - Works with Claude Code and OpenCode out of the box
 - Supports Pi via a tiny auto-discovered extension
+
+## Platform support
+
+- **macOS** — full feature set: native helper, app icon, sounds, optional click-to-restore, Homebrew install, and standalone tarballs
+- **Linux** — basic notifications via `notify-send`, with standalone release tarballs for `x64` and `arm64`
+- **Windows** — basic notifications via PowerShell / BurntToast, with a standalone `x64` release zip
 
 ## Install
 
@@ -27,11 +39,29 @@ brew tap piqusy/tap
 brew install agent-notify
 ```
 
-Exact release pinning:
+For exact historical versions, use the standalone assets attached to each GitHub Release.
 
-```sh
-brew install piqusy/tap/agent-notify@<version>
+### Standalone binaries
+
+Download the asset matching your OS/CPU from the latest [GitHub Release](https://github.com/piqusy/agent-notify/releases):
+
+- macOS: `agent-notify-darwin-arm64.tar.gz`, `agent-notify-darwin-x64.tar.gz`
+- Linux: `agent-notify-linux-arm64.tar.gz`, `agent-notify-linux-x64.tar.gz`
+- Windows: `agent-notify-windows-x64.zip`
+
+Each archive contains the CLI binary under `bin/` plus the bundled integration files.
+
+#### Windows standalone quick start
+
+1. Download `agent-notify-windows-x64.zip`
+2. Extract it somewhere like `C:\Tools\agent-notify\`
+3. Run the binary directly:
+
+```powershell
+C:\Tools\agent-notify\bin\agent-notify.exe --version
 ```
+
+Optional: add `C:\Tools\agent-notify\bin` to your `PATH` so you can run `agent-notify` from any terminal.
 
 ### From source
 
@@ -62,7 +92,7 @@ Run the interactive wizard:
 agent-notify init
 ```
 
-This walks you through backend selection, terminal app focus detection, quiet hours, sound selection (with live preview), and event selection.
+This walks you through backend selection, terminal app focus detection, quiet hours, sound selection (with live preview), event selection, and optional macOS click-to-restore.
 
 Config is saved to `~/.config/agent-notify/config.json`.
 
@@ -71,13 +101,30 @@ Config is saved to `~/.config/agent-notify/config.json`.
 ```sh
 agent-notify done                              # send a "done" notification
 agent-notify question                          # send a "question" notification
+agent-notify permission                        # send a "permission request" notification
 agent-notify test done                         # send a test notification
+agent-notify test permission                   # send a permission test notification
 agent-notify sounds            # list available sounds
 agent-notify sounds --play Morse
+agent-notify status            # explain whether notifications would send right now
+agent-notify explain           # alias for status
 agent-notify init              # re-run setup wizard
 agent-notify install all       # install all supported integrations
 agent-notify uninstall pi      # remove one integration
 ```
+
+## Notification layout
+
+Notifications use the title for the agent + event, and the body for compact context:
+
+```text
+Pi — Done
+▣  editor
+⎇  main
+```
+
+- `▣` shows the current Zellij tab name when available; otherwise it falls back to the project directory name
+- `⎇` shows the current Git branch, or `—` when no branch is available
 
 ## Claude Code
 
@@ -93,7 +140,7 @@ Hooks are configured in `~/.claude/settings.json`, and the hook scripts are copi
 |------|-------|
 | `Stop` | Agent finished — sends **done** notification |
 | `Notification` | Agent waiting for input — sends **question** notification |
-| `PermissionRequest` | Agent needs permission — sends **question** notification |
+| `PermissionRequest` | Agent needs permission — sends **permission** notification |
 
 ## OpenCode
 
@@ -104,6 +151,11 @@ agent-notify install opencode
 ```
 
 This copies the plugin into `~/.config/opencode/plugins/opencode-agent-notify/` and updates `~/.config/opencode/opencode.json`. It listens to `session.idle`, `session.error`, and `permission.asked` events.
+
+It emits:
+
+- **done** for `session.idle` and `session.error`
+- **permission** for `permission.asked`
 
 ## Pi
 
@@ -119,6 +171,7 @@ It emits:
 
 - **done** when Pi finishes a turn
 - **question** when the last assistant line ends with `?`
+- nothing for aborted/error turns or assistant turns with no visible text, avoiding false-positive completion notifications
 
 Pi does not have a built-in permission-request event, so there is no Pi `permission` notification.
 
@@ -147,20 +200,27 @@ agent-notify uninstall pi
     "permission": true
   },
   "terminalApp": null,
-  "backend": null
+  "backend": null,
+  "clickRestore": {
+    "enabled": false
+  }
 }
 ```
 
-`terminalApp: null` — auto-detected via `$TERM_PROGRAM`. Set to e.g. `"iTerm2"` to override.  
+`terminalApp: null` — auto-detected from terminal-specific env markers, `$TERM_PROGRAM`, and on macOS a parent-process fallback. This now covers common setups for iTerm2, Terminal, Warp, kitty, WezTerm, Hyper, Ghostty, Alacritty, VS Code, GNOME Terminal, Konsole, foot, Rio, and Tabby. Set it explicitly to e.g. `"iTerm2"` to override.
 `backend: null` — auto-detected. On modern macOS this prefers the bundled native helper app, then falls back to `osascript` only if the helper is unavailable.  
+`clickRestore.enabled: true` — on macOS helper notifications, clicking the notification restores the terminal app, attempts to switch to the originating Zellij tab, and for kitty will also try to focus the originating kitty window when remote-control metadata is available.  
 `sounds.permission: null` — falls back to the question sound.  
 `quietHours: null` — disables quiet hours entirely (sounds play at all times).
 
+Missing config fields are merged with defaults automatically. If the config contains invalid JSON or invalid values, `agent-notify doctor` reports the exact problems and invalid settings fall back to defaults until you save a corrected config.
+
 ## Requirements
 
-- macOS
 - [bun](https://bun.sh) (for source install only — Homebrew install is standalone)
-- Xcode Command Line Tools / Swift (for source install on macOS so the helper app can be built)
+- **macOS (source install):** Xcode Command Line Tools / Swift so the native helper app can be built
+- **Linux:** `notify-send` available on `PATH`
+- **Windows:** PowerShell available; BurntToast recommended for native toast notifications
 
 ## Troubleshooting
 
@@ -172,13 +232,30 @@ agent-notify doctor
 
 It checks config validity, backend detection, notification permissions, focus state, quiet hours, helper availability, and sound files in one pass.
 
+For a faster "would this notify right now?" view, run:
+
+```sh
+agent-notify status
+agent-notify status --tool claude-code
+agent-notify explain --tool opencode
+```
+
+This reports the effective backend, detected terminal app, how it was detected, current focus state, quiet-hours state, cooldown state, and whether `done`, `question`, and `permission` would currently send or be suppressed.
+
+### Config errors
+
+If `~/.config/agent-notify/config.json` contains invalid JSON or bad values, `agent-notify` no longer silently resets everything. Invalid settings are reported by `agent-notify doctor`, and only those broken settings fall back to defaults until you fix and save the file again.
+
 ## Local testing
 
 ```sh
 bun install
+bun run sync:version
 bun run build
 bun run test
 ```
+
+`package.json` at the workspace root is now the canonical version source. Run `bun run sync:version` after changing it to update the workspace package versions and generated CLI version constant.
 
 For OpenCode specifically, rerun `./install.sh` after building so `~/.config/opencode/opencode.json` points at local plugin path, then start fresh OpenCode session and trigger `session.idle` or `permission.asked`.
 
@@ -187,9 +264,24 @@ For Pi specifically, rerun `./install.sh` after editing `packages/pi-coding-agen
 ### No notifications appear
 
 - **macOS notification permissions** — the most common issue. Open **System Settings → Notifications → Agent Notify** and enable **Allow Notifications**. Set the alert style to **Banners** or **Alerts**.
-- **Native helper missing** — if you installed from source on macOS, rerun `bun run build` and make sure the helper app was built successfully.
-- **Fallback backend** — if the helper app is unavailable, agent-notify can fall back to `osascript`, but the bundled helper is the supported macOS path.
-- **Focus detection** — if your terminal is the frontmost app, notifications are suppressed by design. Switch to another app or set `"terminalApp": null` in config to disable focus detection entirely.
+- **macOS native helper missing** — if you installed from source on macOS, rerun `bun run build` and make sure the helper app was built successfully.
+- **Linux backend** — make sure `notify-send` is installed and available on `PATH`, even when using the standalone binary.
+- **Windows backend** — make sure PowerShell is available. BurntToast is preferred; without it, agent-notify falls back to a message box.
+- **Windows standalone zip** — after extracting, run `bin\\agent-notify.exe --version` once to confirm the binary starts before wiring integrations.
+- **Fallback backend** — if the macOS helper app is unavailable, agent-notify can fall back to `osascript`, but the bundled helper is the supported macOS path.
+- **Focus detection** — if your terminal is the frontmost app, notifications are suppressed by design. `agent-notify status` and `agent-notify doctor` now show which terminal was detected and why. If auto-detection is wrong on your machine, set `"terminalApp"` explicitly in config.
+
+### Windows toast notifications
+
+For native Windows toast notifications, install the BurntToast PowerShell module:
+
+```powershell
+Install-Module BurntToast -Scope CurrentUser
+```
+
+If PowerShell asks to trust `PSGallery`, accept it. After installing, restart your terminal/PowerShell session and rerun `agent-notify test done --force`.
+
+Without BurntToast, agent-notify falls back to a simple message box. That fallback still notifies you, but it is less native than a proper toast.
 
 ### No sound
 
@@ -197,10 +289,11 @@ For Pi specifically, rerun `./install.sh` after editing `packages/pi-coding-agen
 - Check that your system volume is not muted.
 - Verify your sound config refers to a valid built-in name: `agent-notify sounds`.
 - During quiet hours, sounds are muted (notifications still appear silently).
+- Linux and Windows backends are more limited than macOS; sound behavior is currently macOS-first.
 
 ### macOS Sequoia / Tahoe
 
-On modern macOS, agent-notify uses its bundled native helper app by default. This is the supported path for reliable notifications and the branded Agent Notify app icon.
+On modern macOS, agent-notify uses its bundled native helper app by default. This is the supported path for reliable notifications, the branded Agent Notify app icon, and click-to-restore when enabled. For kitty, exact window/tab restore is best-effort and depends on kitty remote control being addressable (for example via `KITTY_LISTEN_ON` / `listen_on`).
 
 ### "Sent test notification" but nothing appeared
 

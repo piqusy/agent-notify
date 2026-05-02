@@ -5,15 +5,21 @@ vi.mock("child_process");
 import { sendNotification } from "../platform/index.js";
 import { sendMacOS } from "../platform/macos.js";
 import { sendLinux } from "../platform/linux.js";
+import type { Config } from "../types.js";
 import * as cp from "child_process";
 
-const mockConfig = {
+const mockConfig: Config = {
   backend: null,
   terminalApp: null,
+  clickRestore: { enabled: false },
   cooldownSeconds: 3,
   quietHours: { start: 22, end: 8 },
   sounds: { done: "Morse", question: "Submarine", permission: null },
   events: { done: true, question: true, permission: true },
+  zellij: {
+    tabIndicator: { enabled: true, prefix: " ● " },
+    paneIndicator: { enabled: false, mode: "background", bg: "#3c3836", clearOn: "origin-pane-focus" },
+  },
 };
 
 describe("sendNotification", () => {
@@ -61,6 +67,111 @@ describe("sendNotification", () => {
     expect(cp.spawnSync).toHaveBeenCalledWith(
       "open",
       ["-n", "/tmp/AgentNotify.app", "--args", "--title", "Test", "--body", "body", "--sound", "Morse"],
+      { stdio: "ignore" }
+    );
+  });
+
+  it("passes click spike metadata to the macos helper when provided", () => {
+    sendMacOS(
+      {
+        title: "Test",
+        body: "body",
+        clickTarget: {
+          issuedAt: 1_777_324_000,
+          terminalApp: "Ghostty",
+          terminal: {
+            id: "ghostty",
+            displayName: "Ghostty",
+            bundleId: "com.mitchellh.ghostty",
+          },
+          zellij: { sessionName: "dev", tabId: 7, tabName: "api" },
+        },
+        macosHelperKeepAliveSeconds: 90,
+      },
+      "macos-helper",
+      { helperAppPath: "/tmp/AgentNotify.app" },
+    );
+
+    const encodedTarget = Buffer.from(JSON.stringify({
+      issuedAt: 1_777_324_000,
+      terminalApp: "Ghostty",
+      terminal: {
+        id: "ghostty",
+        displayName: "Ghostty",
+        bundleId: "com.mitchellh.ghostty",
+      },
+      zellij: { sessionName: "dev", tabId: 7, tabName: "api" },
+    }), "utf8").toString("base64");
+
+    expect(cp.spawnSync).toHaveBeenCalledWith(
+      "open",
+      [
+        "-n",
+        "/tmp/AgentNotify.app",
+        "--args",
+        "--title",
+        "Test",
+        "--body",
+        "body",
+        "--click-target",
+        encodedTarget,
+        "--keep-alive-seconds",
+        "90",
+      ],
+      { stdio: "ignore" }
+    );
+  });
+
+  it("passes kitty remote-control metadata to the macos helper when provided", () => {
+    sendMacOS(
+      {
+        title: "Test",
+        body: "body",
+        clickTarget: {
+          issuedAt: 1_777_324_000,
+          terminalApp: "kitty",
+          terminal: {
+            id: "kitty",
+            displayName: "kitty",
+            bundleId: "net.kovidgoyal.kitty",
+            kitty: {
+              windowId: 23,
+              listenOn: "unix:/tmp/kitty-test",
+            },
+          },
+        },
+      },
+      "macos-helper",
+      { helperAppPath: "/tmp/AgentNotify.app" },
+    );
+
+    const encodedTarget = Buffer.from(JSON.stringify({
+      issuedAt: 1_777_324_000,
+      terminalApp: "kitty",
+      terminal: {
+        id: "kitty",
+        displayName: "kitty",
+        bundleId: "net.kovidgoyal.kitty",
+        kitty: {
+          windowId: 23,
+          listenOn: "unix:/tmp/kitty-test",
+        },
+      },
+    }), "utf8").toString("base64");
+
+    expect(cp.spawnSync).toHaveBeenCalledWith(
+      "open",
+      [
+        "-n",
+        "/tmp/AgentNotify.app",
+        "--args",
+        "--title",
+        "Test",
+        "--body",
+        "body",
+        "--click-target",
+        encodedTarget,
+      ],
       { stdio: "ignore" }
     );
   });

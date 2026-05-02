@@ -5,9 +5,10 @@ import {
   BUILTIN_SOUNDS,
   defaultConfig,
   defaultConfigPath,
+  loadConfigResult,
   notify,
-  TERM_PROGRAM_MAP,
-  resolveTerminalApp,
+  KNOWN_TERMINAL_APPS,
+  resolveTerminal,
 } from "@agent-notify/core"
 import type { Config, NotifyBackend } from "@agent-notify/core"
 import { ask } from "../prompts/cancel.js"
@@ -17,15 +18,26 @@ import { confirm } from "../prompts/confirm.js"
 import { input } from "../prompts/input.js"
 import { playSound } from "../sounds/play.js"
 
+const CUSTOM_CHOICE = "__custom__"
+
+type EventName = "done" | "question" | "permission"
+
+type SelectChoiceValue = string | null
+
+export interface CmdInitOptions {
+  configPath?: string
+  existingConfig?: Config
+}
+
 const SOUND_CHOICES = [
   { name: "None (silent)", value: null as string | null },
   ...BUILTIN_SOUNDS.map((s) => ({ name: s, value: s as string | null })),
 ]
 
-const TERMINAL_CHOICES: Array<{ name: string; value: string | null }> = [
-  { name: "Auto-detect from $TERM_PROGRAM", value: null },
-  ...(Object.values(TERM_PROGRAM_MAP) as string[]).map((app) => ({ name: app, value: app as string | null })),
-  { name: "Other (type manually)", value: "__custom__" },
+const TERMINAL_CHOICES: Array<{ name: string; value: SelectChoiceValue }> = [
+  { name: "Auto-detect (env markers, TERM_PROGRAM, process tree)", value: null },
+  ...KNOWN_TERMINAL_APPS.map((app) => ({ name: app, value: app as string | null })),
+  { name: "Other (type manually)", value: CUSTOM_CHOICE },
 ]
 
 const BACKEND_CHOICES: Array<{ name: string; value: NotifyBackend | null }> = [
@@ -36,6 +48,63 @@ const BACKEND_CHOICES: Array<{ name: string; value: NotifyBackend | null }> = [
   { name: "PowerShell / BurntToast (Windows)", value: "powershell" },
 ]
 
+const ZELLIJ_MODE_CHOICES = [
+  { name: "Tab indicator only (recommended)", value: "tab-only" },
+  { name: "Tab indicator + pane tint", value: "tab-and-pane" },
+  { name: "Disable Zellij indicators", value: "disabled" },
+] as const
+
+const ZELLIJ_PANE_BG_CHOICES = [
+  { name: "Subtle neutral (#32302f)", value: "#32302f" },
+  { name: "Stronger neutral (#3c3836)", value: "#3c3836" },
+  { name: "Warm brown (#3a332b)", value: "#3a332b" },
+  { name: "Custom hex", value: CUSTOM_CHOICE },
+] as const
+
+function isHexColor(value: string): boolean {
+  return /^#[0-9a-fA-F]{6}$/.test(value)
+}
+
+export function getTerminalChoices(detectedTerminal: string | null): Array<{ name: string; value: SelectChoiceValue }> {
+  if (!detectedTerminal) return TERMINAL_CHOICES
+
+  return [
+    { name: `Auto-detect: ${detectedTerminal} (current)`, value: null },
+    ...TERMINAL_CHOICES.slice(1),
+  ]
+}
+
+export function getTerminalChoiceDefault(
+  existingTerminalApp: string | null,
+  choices: Array<{ name: string; value: SelectChoiceValue }>,
+): SelectChoiceValue {
+  if (existingTerminalApp === null) return null
+  if (choices.some((choice) => choice.value === existingTerminalApp)) return existingTerminalApp
+  return CUSTOM_CHOICE
+}
+
+export function getEnabledEventDefaults(config: Config): EventName[] {
+  const enabled: EventName[] = []
+
+  if (config.events.done) enabled.push("done")
+  if (config.events.question) enabled.push("question")
+  if (config.events.permission) enabled.push("permission")
+
+  return enabled
+}
+
+function zellijModeFromConfig(config: Config): (typeof ZELLIJ_MODE_CHOICES)[number]["value"] {
+  if (!config.zellij.tabIndicator.enabled) return "disabled"
+  if (config.zellij.paneIndicator.enabled) return "tab-and-pane"
+  return "tab-only"
+}
+
+function shouldAskForZellijConfig(config: Config): boolean {
+  if (process.env.ZELLIJ !== undefined) return true
+
+  return JSON.stringify(config.zellij) !== JSON.stringify(defaultConfig.zellij)
+}
+
 function detectMacOSVersion(): string | null {
   try {
     return execSync("sw_vers -productVersion", { encoding: "utf8" }).trim()
@@ -44,44 +113,59 @@ function detectMacOSVersion(): string | null {
   }
 }
 
-export async function cmdInit(): Promise<void> {
+export async function cmdInit(options: CmdInitOptions = {}): Promise<void> {
+  const configPath = options.configPath ?? defaultConfigPath
+  const loadedConfig = options.existingConfig
+    ? { config: options.existingConfig, status: "ok", issues: [] }
+    : await loadConfigResult(configPath)
+  const existingConfig = loadedConfig.config
+
+  if (!options.existingConfig) {
+    if (loadedConfig.status === "invalid-json") {
+      console.log(`Warning: existing config at ${configPath} contains invalid JSON. The wizard will use defaults until you save a fixed config.\n`)
+    } else if (loadedConfig.status === "invalid-fields") {
+      console.log(`Warning: existing config at ${configPath} has invalid settings. The wizard will keep valid values and reset invalid ones to defaults.`)
+      for (const problem of loadedConfig.issues) {
+        console.log(`  - ${problem.path}: ${problem.message}`)
+      }
+      console.log("")
+    }
+  }
+
   console.log("agent-notify setup wizard")
   console.log("=========================\n")
 
-  // --- macOS note ---
   const macVersion = detectMacOSVersion()
   if (macVersion) {
     console.log(`macOS ${macVersion} detected.`)
     console.log("  Native helper backend is the supported macOS path. osascript is kept only as a fallback.\n")
   }
 
-  // --- Backend ---
   const backend = await ask(selectWithPreview<NotifyBackend | null>({
     message: "Notification backend",
     choices: BACKEND_CHOICES,
-    default: null,
+    default: existingConfig.backend,
   }))
 
-  // --- Terminal app ---
-  const detectedTerminal = process.env.TERM_PROGRAM
-    ? (TERM_PROGRAM_MAP[process.env.TERM_PROGRAM] ?? null)
-    : null
+  const detectedTerminal = resolveTerminal({
+    configOverride: null,
+    env: process.env,
+    termProgram: process.env.TERM_PROGRAM ?? "",
+  })
+  const terminalChoices = getTerminalChoices(detectedTerminal?.displayName ?? null)
+  const terminalChoiceDefault = getTerminalChoiceDefault(existingConfig.terminalApp, terminalChoices)
 
   let terminalApp: string | null = null
   const terminalChoice = await ask(selectWithPreview<string | null>({
     message: "Terminal app for focus detection",
-    choices: detectedTerminal
-      ? [
-          { name: `Auto-detect: ${detectedTerminal} (current)`, value: null },
-          ...TERMINAL_CHOICES.slice(1),
-        ]
-      : TERMINAL_CHOICES,
-    default: null,
+    choices: terminalChoices,
+    default: terminalChoiceDefault,
   }))
 
-  if (terminalChoice === "__custom__") {
+  if (terminalChoice === CUSTOM_CHOICE) {
     const custom = await ask(input({
       message: "Terminal app name (as shown in macOS Activity Monitor)",
+      default: existingConfig.terminalApp ?? "",
       validate: (v) => v.trim().length > 0 || "Required",
     }))
     terminalApp = custom.trim()
@@ -89,13 +173,12 @@ export async function cmdInit(): Promise<void> {
     terminalApp = terminalChoice
   }
 
-  // --- Quiet hours ---
   const quietHoursEnabled = await ask(confirm({
     message: "Enable quiet hours (mute sounds at night)?",
-    default: true,
+    default: existingConfig.quietHours !== null,
   }))
 
-  const defaultQuietHours = defaultConfig.quietHours ?? { start: 22, end: 8 }
+  const defaultQuietHours = existingConfig.quietHours ?? defaultConfig.quietHours ?? { start: 22, end: 8 }
   let quietHours: typeof defaultConfig.quietHours | null = defaultQuietHours
   if (quietHoursEnabled) {
     const startStr = await ask(input({
@@ -119,18 +202,17 @@ export async function cmdInit(): Promise<void> {
     quietHours = null
   }
 
-  // --- Sounds ---
   const soundDone = await ask(selectWithPreview<string | null>({
     message: "Sound for 'done' notifications",
     choices: SOUND_CHOICES,
-    default: defaultConfig.sounds.done,
+    default: existingConfig.sounds.done,
     onPreview: (v) => { if (v) playSound(v) },
   }))
 
   const soundQuestion = await ask(selectWithPreview<string | null>({
     message: "Sound for 'question' notifications",
     choices: SOUND_CHOICES,
-    default: defaultConfig.sounds.question,
+    default: existingConfig.sounds.question,
     onPreview: (v) => { if (v) playSound(v) },
   }))
 
@@ -140,59 +222,137 @@ export async function cmdInit(): Promise<void> {
       { name: "Same as question (default)", value: null as string | null },
       ...BUILTIN_SOUNDS.map((s) => ({ name: s, value: s as string | null })),
     ],
-    default: defaultConfig.sounds.permission,
+    default: existingConfig.sounds.permission,
     onPreview: (v) => { if (v) playSound(v) },
   }))
 
-  // --- Events ---
-  const enabledEvents = await ask(checkbox({
+  const enabledEvents = await ask(checkbox<EventName>({
     message: "Which events should trigger notifications?",
     choices: [
-      { name: "Done (agent finished work)", value: "done", checked: true },
-      { name: "Question (agent waiting for input)", value: "question", checked: true },
-      { name: "Permission (agent requesting permission)", value: "permission", checked: true },
+      { name: "Done (agent finished work)", value: "done", checked: existingConfig.events.done },
+      { name: "Question (agent waiting for input)", value: "question", checked: existingConfig.events.question },
+      { name: "Permission (agent requesting permission)", value: "permission", checked: existingConfig.events.permission },
     ],
   }))
 
-  // --- Cooldown ---
   const cooldownStr = await ask(input({
     message: "Cooldown between notifications (seconds)",
-    default: String(defaultConfig.cooldownSeconds),
+    default: String(existingConfig.cooldownSeconds),
     validate: (v) => {
       const n = parseInt(v, 10)
       return (!isNaN(n) && n >= 0) || "Enter a non-negative integer"
     },
   }))
 
-  // --- Build config ---
+  let clickRestore = existingConfig.clickRestore
+  if (process.platform === "darwin") {
+    const enabled = await ask(confirm({
+      message: "Enable click-to-restore on macOS notifications?",
+      default: existingConfig.clickRestore.enabled,
+    }))
+    clickRestore = { enabled }
+  }
+
+  let zellij = existingConfig.zellij
+  if (shouldAskForZellijConfig(existingConfig)) {
+    const zellijMode = await ask(selectWithPreview<(typeof ZELLIJ_MODE_CHOICES)[number]["value"]>({
+      message: "Zellij visual indicators for background notifications",
+      choices: [...ZELLIJ_MODE_CHOICES],
+      default: zellijModeFromConfig(existingConfig),
+    }))
+
+    if (zellijMode === "disabled") {
+      zellij = {
+        tabIndicator: {
+          ...existingConfig.zellij.tabIndicator,
+          enabled: false,
+        },
+        paneIndicator: {
+          ...existingConfig.zellij.paneIndicator,
+          enabled: false,
+        },
+      }
+    } else if (zellijMode === "tab-only") {
+      zellij = {
+        tabIndicator: {
+          ...existingConfig.zellij.tabIndicator,
+          enabled: true,
+        },
+        paneIndicator: {
+          ...existingConfig.zellij.paneIndicator,
+          enabled: false,
+        },
+      }
+    } else {
+      const defaultPaneBg = existingConfig.zellij.paneIndicator.bg ?? defaultConfig.zellij.paneIndicator.bg ?? "#32302f"
+      const paneBgChoice = await ask(selectWithPreview<string>({
+        message: "Pane tint color",
+        choices: ZELLIJ_PANE_BG_CHOICES.map((choice) => ({
+          name: choice.name,
+          value: choice.value,
+        })),
+        default: ZELLIJ_PANE_BG_CHOICES.some((choice) => choice.value === defaultPaneBg)
+          ? defaultPaneBg
+          : CUSTOM_CHOICE,
+      }))
+
+      const paneBg = paneBgChoice === CUSTOM_CHOICE
+        ? await ask(input({
+            message: "Pane background hex color",
+            default: defaultPaneBg,
+            validate: (value) => isHexColor(value.trim()) || "Enter a hex color like #32302f",
+          }))
+        : paneBgChoice
+
+      zellij = {
+        tabIndicator: {
+          ...existingConfig.zellij.tabIndicator,
+          enabled: true,
+        },
+        paneIndicator: {
+          ...existingConfig.zellij.paneIndicator,
+          enabled: true,
+          bg: paneBg.trim(),
+        },
+      }
+    }
+  }
+
   const config: Config = {
     cooldownSeconds: parseInt(cooldownStr, 10),
     quietHours,
     sounds: { done: soundDone, question: soundQuestion, permission: soundPermission },
     events: {
-      done:       enabledEvents.includes("done"),
-      question:   enabledEvents.includes("question"),
+      done: enabledEvents.includes("done"),
+      question: enabledEvents.includes("question"),
       permission: enabledEvents.includes("permission"),
     },
     terminalApp,
     backend,
+    clickRestore,
+    zellij,
   }
 
-  // --- Review ---
   console.log("\nConfig to be written:")
   console.log(JSON.stringify(config, null, 2))
 
-  // Show helpful hints for null values that will be auto-resolved at runtime
   const hints: string[] = []
   if (config.terminalApp === null) {
-    const resolved = resolveTerminalApp(process.env.TERM_PROGRAM ?? "")
-    if (resolved) hints.push(`  terminalApp: null → will auto-detect as "${resolved}" at runtime`)
+    const resolved = resolveTerminal({
+      configOverride: null,
+      env: process.env,
+      termProgram: process.env.TERM_PROGRAM ?? "",
+    })
+    if (resolved) hints.push(`  terminalApp: null → will auto-detect as "${resolved.displayName}" at runtime (${resolved.reason})`)
   }
   if (config.quietHours === null) {
     hints.push("  quietHours: null → quiet hours disabled, sounds play at all times")
   }
   if (process.platform === "darwin") {
     hints.push("  macOS uses the bundled native helper app icon")
+    if (config.clickRestore.enabled) {
+      hints.push("  clickRestore.enabled: true → clicking macOS notifications can restore your terminal and Zellij tab")
+    }
   }
   if (hints.length > 0) console.log(hints.join("\n"))
 
@@ -202,13 +362,11 @@ export async function cmdInit(): Promise<void> {
     return
   }
 
-  // --- Write ---
-  const dir = path.dirname(defaultConfigPath)
+  const dir = path.dirname(configPath)
   fs.mkdirSync(dir, { recursive: true })
-  fs.writeFileSync(defaultConfigPath, JSON.stringify(config, null, 2) + "\n", "utf8")
-  console.log(`\nConfig written to ${defaultConfigPath}`)
+  fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n", "utf8")
+  console.log(`\nConfig written to ${configPath}`)
 
-  // --- Test ---
   const sendTest = await ask(confirm({
     message: "Send a test notification now?",
     default: true,

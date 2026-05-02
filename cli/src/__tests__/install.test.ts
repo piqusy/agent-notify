@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest"
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
-import { installTargets, resolveBundledAssets, uninstallTargets } from "../commands/install.js"
+import { installTargets, resolveBundledAssets, uninstallTargets, validateBundledAssets } from "../commands/install.js"
 
 function makeTempDir(): string {
   return mkdtempSync(join(tmpdir(), "agent-notify-"))
@@ -145,5 +145,15 @@ describe("integration installers", () => {
     expect(assets.opencode.indexDts?.startsWith(root)).toBe(false)
     expect(assets.opencode.packageJson?.startsWith(root)).toBe(false)
     expect(assets.pi.extension.startsWith(root)).toBe(false)
+  })
+
+  it("rejects bundled assets that fail integrity checks", () => {
+    const root = makeTempDir()
+    dirs.push(root)
+    const assets = createAssets(root)
+
+    write(assets.claudeCode.stop, "echo missing shebang\n")
+
+    expect(() => validateBundledAssets(assets)).toThrow(/expected bash shebang/)
   })
 })

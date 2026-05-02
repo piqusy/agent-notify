@@ -26,5 +26,7 @@ Releases are tag-driven. Push a `v*` tag to start the GitHub Actions release wor
 
 ## Notes
 
+- GitHub Actions in workflows must stay pinned to full commit SHAs, not floating tags like `@v6`.
+- When updating an action, move to a newer SHA pin and prefer releases that target the current supported GitHub Actions runtime.
 - Do not rely on release-day dates in CI checks; changelog validation only needs the version prefix.
 - If you change release flow, update this file at the same time.

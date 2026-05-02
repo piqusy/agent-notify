@@ -1,9 +1,9 @@
 import { execFileSync, execSync } from "node:child_process"
-import { existsSync, readFileSync } from "node:fs"
+import { existsSync } from "node:fs"
 import {
   defaultConfigPath,
-  loadConfig,
-  resolveTerminalApp,
+  loadConfigResult,
+  resolveTerminal,
   isTerminalFocused,
   isQuietHour,
   detectMacOSBackend,
@@ -78,29 +78,29 @@ function describeIconBehavior(backend: NotifyBackend | null): { level: "ok" | "w
   return { level: "ok", detail: "Platform default icon will be used" }
 }
 
+function printConfigIssues(issues: Array<{ path: string; message: string }>): void {
+  for (const problem of issues) {
+    console.log(`                    - ${problem.path}: ${problem.message}`)
+  }
+}
+
 export async function cmdDoctor(): Promise<void> {
   console.log("agent-notify doctor")
   console.log("====================\n")
 
-  const configExists = existsSync(defaultConfigPath)
-  let config: Config | null = null
-  if (configExists) {
-    try {
-      const raw = readFileSync(defaultConfigPath, "utf8")
-      JSON.parse(raw)
-      config = await loadConfig(defaultConfigPath)
-      line(OK, "Config", defaultConfigPath)
-    } catch (e) {
-      line(FAIL, "Config", `${defaultConfigPath} — invalid JSON: ${e instanceof Error ? e.message : e}`)
-    }
-  } else {
-    line(WARN, "Config", `${defaultConfigPath} — not found (using defaults)`)
-    config = await loadConfig()
-  }
+  const configResult = await loadConfigResult(defaultConfigPath)
+  const config: Config = configResult.config
 
-  if (!config) {
-    console.log("\nCannot continue without a valid config.")
-    return
+  if (configResult.status === "ok") {
+    line(OK, "Config", defaultConfigPath)
+  } else if (configResult.status === "missing") {
+    line(WARN, "Config", `${defaultConfigPath} — not found (using defaults)`)
+  } else if (configResult.status === "invalid-json") {
+    line(FAIL, "Config", `${defaultConfigPath} — invalid JSON (using defaults)`)
+    printConfigIssues(configResult.issues)
+  } else {
+    line(WARN, "Config", `${defaultConfigPath} — invalid settings reset to defaults`)
+    printConfigIssues(configResult.issues)
   }
 
   const macVer = getMacOSVersion()
@@ -144,17 +144,33 @@ export async function cmdDoctor(): Promise<void> {
     }
   }
 
-  const termProgram = process.env.TERM_PROGRAM ?? ""
-  const termApp = config.terminalApp ?? resolveTerminalApp(termProgram)
+  const resolvedTerminal = resolveTerminal({
+    configOverride: config.terminalApp,
+    env: process.env,
+    termProgram: process.env.TERM_PROGRAM ?? "",
+  })
+  const termApp = resolvedTerminal?.displayName ?? null
+  if (resolvedTerminal) {
+    const sourceLabel = resolvedTerminal.source === "config-override"
+      ? "manual override"
+      : resolvedTerminal.source === "env-override"
+        ? "env override"
+        : resolvedTerminal.source
+    line(OK, "Terminal", `${resolvedTerminal.displayName} — ${sourceLabel} (${resolvedTerminal.reason})`)
+  } else {
+    const termProgram = process.env.TERM_PROGRAM ?? ""
+    line(WARN, "Terminal", `Could not detect terminal app (TERM_PROGRAM=${termProgram || "(empty)"})`)
+  }
+
   if (termApp) {
-    const focused = await isTerminalFocused(termApp)
+    const focused = await isTerminalFocused(resolvedTerminal ?? termApp)
     if (focused) {
       line(WARN, "Focus", `${termApp} is frontmost — notifications would be suppressed`)
     } else {
       line(OK, "Focus", `${termApp} is not frontmost — notifications will be sent`)
     }
   } else {
-    line(WARN, "Focus", `Could not detect terminal app (TERM_PROGRAM=${termProgram || "(empty)"}) — focus check skipped`)
+    line(WARN, "Focus", "Focus check skipped because terminal detection failed")
   }
 
   if (config.quietHours === null) {
