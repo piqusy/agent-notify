@@ -47,6 +47,10 @@ export async function getCurrentTabInfo(): Promise<{ tabId: number; tabName: str
  * No-ops if the tab name already has the prefix.
  */
 export function markTabNotified(tabId: number, originalName: string): void {
+  if (originalName.startsWith(TAB_NOTIFY_PREFIX)) {
+    return
+  }
+
   try {
     const result = spawnSync("zellij", ["action", "rename-tab", "-t", String(tabId), `${TAB_NOTIFY_PREFIX}${originalName}`], {
       stdio: "ignore",
@@ -68,10 +72,29 @@ while [ "$tries" -lt "$MAX" ]; do
     active="$(printf '%s' "$tabs" | jq -r --argjson tabId "$TAB_ID" '.[] | select(.tab_id == $tabId) | .active' 2>/dev/null || true)"
     if [ "$active" = "true" ]; then
       current_name="$(printf '%s' "$tabs" | jq -r --argjson tabId "$TAB_ID" '.[] | select(.tab_id == $tabId) | .name' 2>/dev/null || true)"
-      case "$current_name" in
-        " ● "*) restored_name=\${current_name#" ● "} ;;
-        *) restored_name="$current_name" ;;
-      esac
+      restored_name="$current_name"
+      while case "$restored_name" in " ● "*) true ;; *) false ;; esac; do
+        restored_name=\${restored_name#" ● "}
+      done
+      
+      # Also strip old "working" indicators (e.g., from opencode or pi) if they linger
+      while case "$restored_name" in " ⏳ "*) true ;; *) false ;; esac; do
+        restored_name=\${restored_name#" ⏳ "}
+      done
+      while case "$restored_name" in "⏳ "*) true ;; *) false ;; esac; do
+        restored_name=\${restored_name#"⏳ "}
+      done
+      
+      # Strip Braille dots if they exist
+      for dot in "⠁" "⠂" "⠄" "⡀" "⢀" "⠠" "⠐" "⠈" "⣾" "⣽" "⣻" "⢿" "⡿" "⣟" "⣯" "⣷"; do
+        while case "$restored_name" in " $dot "*) true ;; *) false ;; esac; do
+          restored_name=\${restored_name#" $dot "}
+        done
+        while case "$restored_name" in "$dot "*) true ;; *) false ;; esac; do
+          restored_name=\${restored_name#"$dot "}
+        done
+      done
+
       if [ "$restored_name" != "$current_name" ]; then
         zellij action rename-tab -t "$TAB_ID" "$restored_name" >/dev/null 2>&1 || true
       fi
