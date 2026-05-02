@@ -23,6 +23,7 @@ export interface EventFilter {
 export interface ZellijTabIndicatorConfig {
   enabled: boolean
   prefix: string
+  workingPrefix: string
 }
 
 export interface ZellijPaneIndicatorConfig {
