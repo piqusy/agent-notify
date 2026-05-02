@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.8] — 2026-05-02
+
+### Fixed
+- Main CI now passes again after updating Zellij-related test fixtures to include the required `workingPrefix` config
+- CLI notify command tests now set explicit Zellij session and pane environment values, matching the current `working-start` and `working-stop` command behavior
+
 ## [0.2.7] — 2026-05-02
 
 ### Added
