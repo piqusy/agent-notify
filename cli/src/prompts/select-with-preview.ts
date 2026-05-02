@@ -36,6 +36,8 @@ export interface SelectWithPreviewConfig<V> {
   default?: V
   pageSize?: number
   loop?: boolean
+  /** Label for the preview key (defaults to "preview sound") */
+  previewLabel?: string
   /** Called with the current choice value when user presses "p" */
   onPreview?: (value: V) => void
 }
@@ -139,7 +141,7 @@ export const selectWithPreview: <V>(config: SelectWithPreviewConfig<V>) => Promi
       `${colors.bold("enter")} select`,
     ]
     if (onPreview) {
-      helpBindings.push(`${colors.bold("p")} preview sound`)
+      helpBindings.push(`${colors.bold("p")} ${config.previewLabel || "preview sound"}`)
     }
     helpBindings.push(`${colors.bold("esc")} cancel`)
     const helpTip =
