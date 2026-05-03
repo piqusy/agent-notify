@@ -1,3 +1,6 @@
+import { mkdtempSync, readFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { describe, it, expect, vi, afterEach } from "vitest"
 
 vi.mock("../config.js", () => ({
@@ -76,6 +79,7 @@ describe("notify integration (skip in CI — uses real config/fs)", () => {
     delete process.env.AGENT_NOTIFY_CLICK_SPIKE_KEEP_ALIVE_SECONDS
     delete process.env.KITTY_WINDOW_ID
     delete process.env.KITTY_LISTEN_ON
+    delete process.env.AGENT_NOTIFY_DEBUG_LOG
     vi.restoreAllMocks()
   })
 
@@ -97,6 +101,37 @@ describe("notify integration (skip in CI — uses real config/fs)", () => {
     expect(platform.sendNotification).toHaveBeenCalled()
     expect((zellij.markTabNotified as unknown as { mock: { invocationCallOrder: number[] } }).mock.invocationCallOrder[0])
       .toBeLessThan((platform.sendNotification as unknown as { mock: { invocationCallOrder: number[] } }).mock.invocationCallOrder[0])
+  })
+
+  it("writes timing debug entries when AGENT_NOTIFY_DEBUG_LOG is set", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "agent-notify-debug-"))
+    const logFile = join(dir, "notify.jsonl")
+    process.env.AGENT_NOTIFY_DEBUG_LOG = logFile
+
+    vi.spyOn(zellij, "isZellijSession").mockReturnValue(true)
+    vi.spyOn(zellij, "isPaneTabActive").mockResolvedValue(false)
+    vi.spyOn(zellij, "getCurrentTabInfo").mockResolvedValue({ tabId: 12, tabName: "agent-notify" })
+    vi.spyOn(zellij, "markTabNotified").mockImplementation(() => undefined)
+    vi.spyOn(platform, "sendNotification").mockResolvedValue(undefined)
+
+    await notify({ state: "done", tool: "test", cwd: process.cwd() })
+
+    const events = readFileSync(logFile, "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as { event: string })
+      .map((line) => line.event)
+
+    expect(events).toEqual(expect.arrayContaining([
+      "notify-start",
+      "tab-indicator-start",
+      "tab-indicator-end",
+      "git-branch-start",
+      "git-branch-end",
+      "notification-send-start",
+      "notification-send-end",
+    ]))
+    expect(events.indexOf("tab-indicator-start")).toBeLessThan(events.indexOf("notification-send-start"))
   })
 
   it("uses friendly display names for supported tools", async () => {

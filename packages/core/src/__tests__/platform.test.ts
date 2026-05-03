@@ -1,4 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("child_process");
 
@@ -26,6 +29,10 @@ describe("sendNotification", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     vi.mocked(cp.execSync).mockImplementation(() => "14.5\n" as any);
+  });
+
+  afterEach(() => {
+    delete process.env.AGENT_NOTIFY_DEBUG_LOG;
   });
 
   it("does not throw on darwin", async () => {
@@ -174,6 +181,27 @@ describe("sendNotification", () => {
       ],
       { stdio: "ignore" }
     );
+  });
+
+  it("writes macOS launch timing entries when AGENT_NOTIFY_DEBUG_LOG is set", () => {
+    const dir = mkdtempSync(join(tmpdir(), "agent-notify-platform-debug-"));
+    const logFile = join(dir, "macos.jsonl");
+    process.env.AGENT_NOTIFY_DEBUG_LOG = logFile;
+    vi.mocked(cp.spawnSync).mockReturnValue({ status: 0 } as any);
+
+    sendMacOS(
+      { title: "Test", body: "body" },
+      "macos-helper",
+      { helperAppPath: "/tmp/AgentNotify.app" },
+    );
+
+    const events = readFileSync(logFile, "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as { event: string })
+      .map((line) => line.event);
+
+    expect(events).toEqual(["macos-helper-launch-start", "macos-helper-launch-end"]);
   });
 
   it("uses plain notify-send on linux", () => {

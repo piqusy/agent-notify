@@ -242,6 +242,22 @@ agent-notify explain --tool opencode
 
 This reports the effective backend, detected terminal app, how it was detected, current focus state, quiet-hours state, cooldown state, and whether `done`, `question`, and `permission` would currently send or be suppressed.
 
+### Timing debug
+
+For popup-vs-tab-indicator race debugging, capture core timing and macOS helper timing side by side:
+
+```sh
+export AGENT_NOTIFY_DEBUG_LOG=/tmp/agent-notify-debug.jsonl
+export AGENT_NOTIFY_MACOS_HELPER_LOG=/tmp/agent-notify-helper.log
+```
+
+Then reproduce one notification and inspect:
+
+- `AGENT_NOTIFY_DEBUG_LOG` — JSONL from core flow, including `tab-indicator-start`, `tab-indicator-end`, `git-branch-start`, `git-branch-end`, `notification-send-start`, `notification-send-end`, and macOS launch events like `macos-helper-launch-start`
+- `AGENT_NOTIFY_MACOS_HELPER_LOG` — native helper log lines after helper process starts
+
+This makes it easy to see whether lag comes from Zellij rename timing, Git branch lookup, helper launch, or Notification Center display timing.
+
 ### Config errors
 
 If `~/.config/agent-notify/config.json` contains invalid JSON or bad values, `agent-notify` no longer silently resets everything. Invalid settings are reported by `agent-notify doctor`, and only those broken settings fall back to defaults until you fix and save the file again.

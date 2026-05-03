@@ -34,7 +34,7 @@ describe("Pi agent-notify lifecycle integration", () => {
     )
   })
 
-  it("clears working and sends done on agent_end", async () => {
+  it("sends done on agent_end without separate working-stop", async () => {
     const handlers: Record<string, Function> = {}
     const pi = {
       on: vi.fn((event: string, handler: Function) => {
@@ -47,14 +47,8 @@ describe("Pi agent-notify lifecycle integration", () => {
       messages: [{ role: "assistant", content: [{ type: "text", text: "Done." }] }],
     }, { cwd: "/tmp/project" })
 
-    expect(spawnMock).toHaveBeenNthCalledWith(
-      1,
-      "agent-notify",
-      ["working-stop"],
-      expect.objectContaining({ stdio: "ignore" }),
-    )
-    expect(spawnMock).toHaveBeenNthCalledWith(
-      2,
+    expect(spawnMock).toHaveBeenCalledTimes(1)
+    expect(spawnMock).toHaveBeenCalledWith(
       "agent-notify",
       ["done", "/tmp/project", "--tool", "pi-coding-agent"],
       expect.objectContaining({ stdio: "ignore" }),

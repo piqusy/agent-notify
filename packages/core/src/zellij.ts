@@ -1,16 +1,34 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
-import { tmpdir } from "node:os"
-import { join } from "node:path"
-import { exec, spawn, spawnSync } from "node:child_process"
-import { promisify } from "node:util"
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs"
+import { homedir, tmpdir } from "node:os"
+import { delimiter, join } from "node:path"
+import { spawn, spawnSync } from "node:child_process"
 import type { Config } from "./types.js"
 
-const execAsync = promisify(exec)
 const ZELLIJ_STATE_PREFIX = "agent-notify-zellij-state"
 const POLLER_PID_FILE = "poller.pid"
 
 const TAB_NOTIFY_PREFIX = " ● "
 const TAB_WORKING_PREFIX = " ○ "
+
+function writeDebugLog(payload: Record<string, unknown>): void {
+  const file = process.env.AGENT_NOTIFY_DEBUG_LOG?.trim()
+  if (!file) return
+
+  try {
+    appendFileSync(file, `${JSON.stringify({
+      timestamp: Date.now(),
+      pid: process.pid,
+      source: "core:zellij",
+      ...payload,
+    })}\n`, "utf8")
+  } catch {
+    // debug logging must never affect zellij flow
+  }
+}
+
+function elapsedMs(startedAt: bigint): number {
+  return Number(process.hrtime.bigint() - startedAt) / 1_000_000
+}
 
 export type ZellijNotifyOptions = {
   sessionName?: string | null
@@ -18,6 +36,7 @@ export type ZellijNotifyOptions = {
   tabIndicator?: Config["zellij"]["tabIndicator"]
   paneIndicator?: Config["zellij"]["paneIndicator"]
   workingPrefix?: string
+  deferAuxiliaryWork?: boolean
 }
 
 type PendingPaneState = {
@@ -74,6 +93,319 @@ function scrubbedZellijEnv(extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
   return env
 }
 
+type PaneTabLookup = {
+  tabId: number
+  tabName: string
+  active: boolean
+}
+
+type SessionMetadataTab = {
+  position: number
+  tabId: number
+  tabName: string
+  active: boolean
+}
+
+type SessionMetadataPane = {
+  paneId: number
+  isPlugin: boolean
+  tabPosition: number
+}
+
+type RunZellijSyncOptions = {
+  sessionName?: string | null
+  captureOutput?: boolean
+  scrubEnv?: boolean
+}
+
+function resolveExecutableOnPath(names: string[]): string | null {
+  const pathValue = process.env.PATH ?? ""
+  if (!pathValue) return null
+
+  for (const dir of pathValue.split(delimiter)) {
+    if (!dir) continue
+
+    for (const name of names) {
+      const candidate = join(dir, name)
+      if (existsSync(candidate)) {
+        return candidate
+      }
+    }
+  }
+
+  return null
+}
+
+function resolveZellijExecutable(): string {
+  const binaryNames = process.platform === "win32"
+    ? ["zellij.exe", "zellij.cmd", "zellij.bat", "zellij"]
+    : ["zellij"]
+
+  const resolvedFromPath = resolveExecutableOnPath(binaryNames)
+  if (resolvedFromPath) {
+    return resolvedFromPath
+  }
+
+  const staticCandidates = process.platform === "win32"
+    ? []
+    : ["/opt/homebrew/bin/zellij", "/usr/local/bin/zellij", "/usr/bin/zellij"]
+
+  for (const candidate of staticCandidates) {
+    if (existsSync(candidate)) {
+      return candidate
+    }
+  }
+
+  return binaryNames[0]!
+}
+
+function runZellijActionSync(
+  args: string[],
+  options: RunZellijSyncOptions = {},
+) {
+  const executable = resolveZellijExecutable()
+  const baseArgs = options.sessionName ? ["--session", options.sessionName] : []
+
+  return spawnSync(executable, [...baseArgs, "action", ...args], {
+    stdio: options.captureOutput ? ["ignore", "pipe", "pipe"] : "ignore",
+    ...(options.captureOutput ? { encoding: "utf8" as const } : {}),
+    ...(options.scrubEnv ? { env: scrubbedZellijEnv() } : {}),
+  })
+}
+
+function zellijCacheRootCandidates(): string[] {
+  const candidates: string[] = []
+  const pushUnique = (value: string | null | undefined) => {
+    const trimmed = value?.trim()
+    if (!trimmed || candidates.includes(trimmed)) return
+    candidates.push(trimmed)
+  }
+
+  const homeDir = homedir()
+  const xdgCacheHome = process.env.XDG_CACHE_HOME?.trim()
+
+  if (process.platform === "darwin") {
+    pushUnique(join(homeDir, "Library", "Caches", "org.Zellij-Contributors.Zellij"))
+    if (xdgCacheHome) {
+      pushUnique(join(xdgCacheHome, "org.Zellij-Contributors.Zellij"))
+    }
+  } else if (process.platform === "win32") {
+    const localAppData = process.env.LOCALAPPDATA?.trim()
+    if (localAppData) {
+      pushUnique(join(localAppData, "Zellij"))
+      pushUnique(join(localAppData, "Zellij", "cache"))
+      pushUnique(join(localAppData, "cache", "Zellij"))
+    }
+  } else {
+    if (xdgCacheHome) {
+      pushUnique(join(xdgCacheHome, "org.Zellij-Contributors.Zellij"))
+    }
+    pushUnique(join(homeDir, ".cache", "org.Zellij-Contributors.Zellij"))
+  }
+
+  return candidates
+}
+
+function resolveSessionMetadataPath(sessionName: string): string | null {
+  for (const cacheRoot of zellijCacheRootCandidates()) {
+    if (!existsSync(cacheRoot)) continue
+
+    let contractVersions: Array<{ version: number; path: string }> = []
+    try {
+      contractVersions = readdirSync(cacheRoot, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory() && /^contract_version_\d+$/.test(entry.name))
+        .map((entry) => ({
+          version: Number.parseInt(entry.name.replace("contract_version_", ""), 10),
+          path: join(cacheRoot, entry.name),
+        }))
+        .filter((entry) => Number.isFinite(entry.version))
+        .sort((a, b) => b.version - a.version)
+    } catch {
+      continue
+    }
+
+    for (const contractVersion of contractVersions) {
+      const metadataPath = join(contractVersion.path, "session_info", sessionName, "session-metadata.kdl")
+      if (existsSync(metadataPath)) {
+        return metadataPath
+      }
+    }
+  }
+
+  return null
+}
+
+function parseKdlScalar(rawValue: string): string | number | boolean | null {
+  const value = rawValue.trim()
+  if (!value) return null
+  if (value === "true") return true
+  if (value === "false") return false
+  if (/^-?\d+$/.test(value)) {
+    return Number.parseInt(value, 10)
+  }
+  if (value.startsWith("\"") && value.endsWith("\"")) {
+    try {
+      return JSON.parse(value) as string
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+function parsePaneTabInfoFromSessionMetadata(text: string, paneId: number): PaneTabLookup | null {
+  const tabsByPosition = new Map<number, SessionMetadataTab>()
+  const panes: SessionMetadataPane[] = []
+  let currentTab: Partial<SessionMetadataTab> | null = null
+  let currentPane: Partial<SessionMetadataPane> | null = null
+
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim()
+    if (!line) continue
+
+    if (line === "tab {") {
+      currentTab = {}
+      continue
+    }
+
+    if (line === "pane {") {
+      currentPane = {}
+      continue
+    }
+
+    if (line === "}") {
+      if (currentTab) {
+        if (
+          typeof currentTab.position === "number"
+          && typeof currentTab.tabId === "number"
+          && typeof currentTab.tabName === "string"
+        ) {
+          tabsByPosition.set(currentTab.position, {
+            position: currentTab.position,
+            tabId: currentTab.tabId,
+            tabName: currentTab.tabName,
+            active: currentTab.active ?? false,
+          })
+        }
+        currentTab = null
+        continue
+      }
+
+      if (currentPane) {
+        if (
+          typeof currentPane.paneId === "number"
+          && typeof currentPane.isPlugin === "boolean"
+          && typeof currentPane.tabPosition === "number"
+        ) {
+          panes.push({
+            paneId: currentPane.paneId,
+            isPlugin: currentPane.isPlugin,
+            tabPosition: currentPane.tabPosition,
+          })
+        }
+        currentPane = null
+        continue
+      }
+
+      continue
+    }
+
+    const match = line.match(/^([a-zA-Z0-9_]+)\s+(.+)$/)
+    if (!match) continue
+
+    const [, key, rawValue] = match
+    const value = parseKdlScalar(rawValue)
+    if (value === null) continue
+
+    if (currentTab) {
+      if (key === "position" && typeof value === "number") currentTab.position = value
+      if (key === "tab_id" && typeof value === "number") currentTab.tabId = value
+      if (key === "name" && typeof value === "string") currentTab.tabName = value
+      if (key === "active" && typeof value === "boolean") currentTab.active = value
+      continue
+    }
+
+    if (currentPane) {
+      if (key === "id" && typeof value === "number") currentPane.paneId = value
+      if (key === "is_plugin" && typeof value === "boolean") currentPane.isPlugin = value
+      if (key === "tab_position" && typeof value === "number") currentPane.tabPosition = value
+    }
+  }
+
+  const matchingPanes = panes.filter((pane) => pane.paneId === paneId)
+  const targetPane = matchingPanes.find((pane) => pane.isPlugin === false) ?? matchingPanes[0]
+  if (!targetPane) return null
+
+  const tab = tabsByPosition.get(targetPane.tabPosition)
+  if (!tab) return null
+
+  return {
+    tabId: tab.tabId,
+    tabName: tab.tabName,
+    active: tab.active,
+  }
+}
+
+function lookupPaneTabInfoFromSessionMetadata(sessionName: string | null, paneId: number): PaneTabLookup | null {
+  if (!sessionName) return null
+
+  const startedAt = process.hrtime.bigint()
+  writeDebugLog({ event: "session-metadata-lookup-start", sessionName, paneId })
+
+  try {
+    const saveStartedAt = process.hrtime.bigint()
+    const saveResult = runZellijActionSync(["save-session"], {
+      sessionName,
+      scrubEnv: true,
+    })
+    writeDebugLog({
+      event: "session-metadata-save-end",
+      elapsedMs: elapsedMs(saveStartedAt),
+      sessionName,
+      status: saveResult.status ?? null,
+      error: saveResult.error ? String(saveResult.error) : null,
+    })
+    if (saveResult.error || saveResult.status !== 0) return null
+
+    const metadataPath = resolveSessionMetadataPath(sessionName)
+    writeDebugLog({ event: "session-metadata-path", sessionName, path: metadataPath ?? null })
+    if (!metadataPath) return null
+
+    const readStartedAt = process.hrtime.bigint()
+    const metadata = readFileSync(metadataPath, "utf8")
+    const lookup = parsePaneTabInfoFromSessionMetadata(metadata, paneId)
+    writeDebugLog({
+      event: "session-metadata-read-end",
+      elapsedMs: elapsedMs(readStartedAt),
+      sessionName,
+      paneId,
+      bytes: metadata.length,
+      matched: Boolean(lookup),
+    })
+    if (!lookup) return null
+
+    writeDebugLog({
+      event: "session-metadata-lookup-end",
+      elapsedMs: elapsedMs(startedAt),
+      sessionName,
+      paneId,
+      tabId: lookup.tabId,
+      tabName: lookup.tabName,
+      active: lookup.active,
+    })
+    return lookup
+  } catch (error) {
+    writeDebugLog({
+      event: "session-metadata-lookup-error",
+      elapsedMs: elapsedMs(startedAt),
+      sessionName,
+      paneId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return null
+  }
+}
+
 function applyPaneIndicator(
   sessionName: string | null,
   paneId: number,
@@ -82,36 +414,42 @@ function applyPaneIndicator(
   if (!paneIndicator?.enabled) return false
   if (!paneIndicator.bg) return false
 
+  const startedAt = process.hrtime.bigint()
   const args = ["set-pane-color", "--pane-id", String(paneId), "--bg", paneIndicator.bg]
 
+  writeDebugLog({ event: "pane-indicator-start", paneId, sessionName, bg: paneIndicator.bg })
+
   try {
-    const result = spawnSync("zellij", [
-      ...(sessionName ? ["--session", sessionName] : []),
-      "action",
-      ...args,
-    ], {
-      stdio: "ignore",
-      env: scrubbedZellijEnv(),
+    const result = runZellijActionSync(args, {
+      sessionName,
+      scrubEnv: true,
+    })
+
+    writeDebugLog({
+      event: "pane-indicator-end",
+      elapsedMs: elapsedMs(startedAt),
+      paneId,
+      status: result.status ?? null,
+      error: result.error ? String(result.error) : null,
     })
 
     return !result.error && result.status === 0
-  } catch {
+  } catch (error) {
+    writeDebugLog({
+      event: "pane-indicator-error",
+      elapsedMs: elapsedMs(startedAt),
+      paneId,
+      error: error instanceof Error ? error.message : String(error),
+    })
     return false
   }
 }
 
 function clearPaneIndicator(sessionName: string | null, paneId: number): void {
   try {
-    spawnSync("zellij", [
-      ...(sessionName ? ["--session", sessionName] : []),
-      "action",
-      "set-pane-color",
-      "--pane-id",
-      String(paneId),
-      "--reset",
-    ], {
-      stdio: "ignore",
-      env: scrubbedZellijEnv(),
+    runZellijActionSync(["set-pane-color", "--pane-id", String(paneId), "--reset"], {
+      sessionName,
+      scrubEnv: true,
     })
   } catch {
     // best effort only
@@ -189,19 +527,25 @@ function isPidRunning(pid: number | null): boolean {
 }
 
 function ensureSessionPoller(sessionName: string | null, attentionPrefix: string, workingPrefix: string): void {
+  const startedAt = process.hrtime.bigint()
   const pid = readPollerPid(sessionName)
-  if (isPidRunning(pid)) return
+  if (isPidRunning(pid)) {
+    writeDebugLog({ event: "poller-skip-existing", elapsedMs: elapsedMs(startedAt), sessionName, pid })
+    return
+  }
 
+  const executable = resolveZellijExecutable()
   const dir = sessionStateDir(sessionName)
+  writeDebugLog({ event: "poller-start", sessionName, stateDir: dir, executable })
   mkdirSync(dir, { recursive: true })
 
   const script = `
 set -eu
 run_zellij() {
   if [ -n "$SESSION_NAME" ]; then
-    env -u ZELLIJ -u ZELLIJ_PANE_ID -u ZELLIJ_SESSION_NAME zellij --session "$SESSION_NAME" action "$@"
+    env -u ZELLIJ -u ZELLIJ_PANE_ID -u ZELLIJ_SESSION_NAME "$ZELLIJ_EXECUTABLE" --session "$SESSION_NAME" action "$@"
   else
-    env -u ZELLIJ -u ZELLIJ_PANE_ID -u ZELLIJ_SESSION_NAME zellij action "$@"
+    env -u ZELLIJ -u ZELLIJ_PANE_ID -u ZELLIJ_SESSION_NAME "$ZELLIJ_EXECUTABLE" action "$@"
   fi
 }
 strip_prefix() {
@@ -334,6 +678,7 @@ done
       STATE_DIR: dir,
       PID_FILE: pollerPidFile(sessionName),
       SESSION_NAME: sessionName ?? "",
+      ZELLIJ_EXECUTABLE: executable,
       ATTENTION_PREFIX: attentionPrefix,
       WORKING_PREFIX: workingPrefix,
     },
@@ -341,6 +686,7 @@ done
 
   writeFileSync(pollerPidFile(sessionName), String(child.pid ?? ""), "utf8")
   child.unref()
+  writeDebugLog({ event: "poller-end", elapsedMs: elapsedMs(startedAt), sessionName, pid: child.pid ?? null })
 }
 
 /**
@@ -355,26 +701,118 @@ export function isZellijSession(): boolean {
  * Returns the current pane's tab ID and name, or null if unavailable.
  */
 export async function getCurrentTabInfo(): Promise<{ tabId: number; tabName: string } | null> {
+  const startedAt = process.hrtime.bigint()
   const paneId = process.env.ZELLIJ_PANE_ID
-  if (!paneId) return null
+  if (!paneId) {
+    writeDebugLog({ event: "get-current-tab-info-skip", reason: "missing-pane-id" })
+    return null
+  }
+
+  writeDebugLog({ event: "get-current-tab-info-start", paneId })
 
   try {
-    const [panesOut, tabsOut] = await Promise.all([
-      execAsync("zellij action list-panes --json"),
-      execAsync("zellij action list-tabs --json"),
-    ])
+    const numericPaneId = Number.parseInt(paneId, 10)
+    if (Number.isNaN(numericPaneId)) {
+      writeDebugLog({ event: "get-current-tab-info-skip", reason: "invalid-pane-id", paneId })
+      return null
+    }
 
-    const panes: Array<{ id: number; tab_id: number }> = JSON.parse(panesOut.stdout)
-    const tabs: Array<{ tab_id: number; active: boolean; name: string }> = JSON.parse(tabsOut.stdout)
+    const sessionName = process.env.ZELLIJ_SESSION_NAME ?? null
+    const metadataLookup = lookupPaneTabInfoFromSessionMetadata(sessionName, numericPaneId)
+    if (metadataLookup) {
+      writeDebugLog({
+        event: "get-current-tab-info-end",
+        elapsedMs: elapsedMs(startedAt),
+        paneId,
+        tabId: metadataLookup.tabId,
+        tabName: metadataLookup.tabName,
+        sourceKind: "session-metadata",
+      })
+      return { tabId: metadataLookup.tabId, tabName: metadataLookup.tabName }
+    }
 
-    const ourPane = panes.find((p) => p.id === Number(paneId))
-    if (!ourPane) return null
+    const panesStartedAt = process.hrtime.bigint()
+    const panesResult = runZellijActionSync(["list-panes", "--json", "--tab"], {
+      sessionName,
+      captureOutput: true,
+      scrubEnv: true,
+    })
+    const panesStdout = typeof panesResult.stdout === "string" ? panesResult.stdout : ""
+    writeDebugLog({
+      event: "get-current-tab-info-panes-end",
+      elapsedMs: elapsedMs(panesStartedAt),
+      paneBytes: panesStdout.length,
+      status: panesResult.status ?? null,
+      error: panesResult.error ? String(panesResult.error) : null,
+    })
 
-    const ourTab = tabs.find((t) => t.tab_id === ourPane.tab_id)
-    if (!ourTab) return null
+    if (panesResult.error || panesResult.status !== 0) {
+      return null
+    }
+
+    const panes: Array<{ id: number; tab_id: number; tab_name?: string; is_plugin?: boolean }> = JSON.parse(panesStdout)
+    const matchingPanes = panes.filter((entry) => entry.id === numericPaneId)
+    const ourPane = matchingPanes.find((entry) => entry.is_plugin === false) ?? matchingPanes[0]
+    if (!ourPane) {
+      writeDebugLog({ event: "get-current-tab-info-miss", elapsedMs: elapsedMs(startedAt), reason: "pane-not-found", paneId })
+      return null
+    }
+
+    if (typeof ourPane.tab_name === "string" && ourPane.tab_name.length > 0) {
+      writeDebugLog({
+        event: "get-current-tab-info-end",
+        elapsedMs: elapsedMs(startedAt),
+        paneId,
+        tabId: ourPane.tab_id,
+        tabName: ourPane.tab_name,
+        sourceKind: "panes",
+      })
+      return { tabId: ourPane.tab_id, tabName: ourPane.tab_name }
+    }
+
+    const tabsStartedAt = process.hrtime.bigint()
+    const tabsResult = runZellijActionSync(["list-tabs", "--json"], {
+      sessionName,
+      captureOutput: true,
+      scrubEnv: true,
+    })
+    const tabsStdout = typeof tabsResult.stdout === "string" ? tabsResult.stdout : ""
+    writeDebugLog({
+      event: "get-current-tab-info-tabs-end",
+      elapsedMs: elapsedMs(tabsStartedAt),
+      tabBytes: tabsStdout.length,
+      status: tabsResult.status ?? null,
+      error: tabsResult.error ? String(tabsResult.error) : null,
+    })
+
+    if (tabsResult.error || tabsResult.status !== 0) {
+      return null
+    }
+
+    const tabs: Array<{ tab_id: number; active: boolean; name: string }> = JSON.parse(tabsStdout)
+    const ourTab = tabs.find((entry) => entry.tab_id === ourPane.tab_id)
+    if (!ourTab) {
+      writeDebugLog({ event: "get-current-tab-info-miss", elapsedMs: elapsedMs(startedAt), reason: "tab-not-found", paneId, tabId: ourPane.tab_id })
+      return null
+    }
+
+    writeDebugLog({
+      event: "get-current-tab-info-end",
+      elapsedMs: elapsedMs(startedAt),
+      paneId,
+      tabId: ourTab.tab_id,
+      tabName: ourTab.name,
+      sourceKind: "tabs",
+    })
 
     return { tabId: ourTab.tab_id, tabName: ourTab.name }
-  } catch {
+  } catch (error) {
+    writeDebugLog({
+      event: "get-current-tab-info-error",
+      elapsedMs: elapsedMs(startedAt),
+      paneId,
+      error: error instanceof Error ? error.message : String(error),
+    })
     return null
   }
 }
@@ -384,6 +822,7 @@ export async function getCurrentTabInfo(): Promise<{ tabId: number; tabName: str
  * attention, optionally applies a pane indicator, and ensures the session poller is running.
  */
 export function markTabNotified(tabId: number, originalName: string, options: ZellijNotifyOptions = {}): void {
+  const startedAt = process.hrtime.bigint()
   const sessionName = options.sessionName ?? process.env.ZELLIJ_SESSION_NAME ?? ""
   const originPaneId = options.originPaneId ?? Number.parseInt(process.env.ZELLIJ_PANE_ID ?? "", 10)
   const paneId = Number.isNaN(originPaneId) ? null : originPaneId
@@ -391,31 +830,70 @@ export function markTabNotified(tabId: number, originalName: string, options: Ze
   const workingPrefix = currentWorkingPrefix(options.workingPrefix)
   const paneIndicator = options.paneIndicator
   const effectiveTabIndicatorEnabled = (options.tabIndicator?.enabled ?? true) || Boolean(paneIndicator?.enabled)
+  const finalizeAuxiliaryWork = () => {
+    const paneIndicatorApplied = paneId === null ? false : applyPaneIndicator(sessionName, paneId, paneIndicator)
 
-  if (!effectiveTabIndicatorEnabled || paneId === null) return
+    if (paneId !== null) {
+      writePendingPaneState(sessionName, tabId, paneId, {
+        paneId,
+        updatedAt: Math.floor(Date.now() / 1000),
+        attentionAt: Math.floor(Date.now() / 1000),
+        workingAt: null,
+        paneIndicatorApplied,
+      })
+    }
 
-  const strippedName = stripKnownTabPrefixes(originalName, [tabPrefix, workingPrefix])
+    ensureSessionPoller(sessionName, tabPrefix, workingPrefix)
+    writeDebugLog({ event: "mark-tab-notified-end", elapsedMs: elapsedMs(startedAt), tabId, paneId, paneIndicatorApplied })
+  }
 
-  try {
-    const result = spawnSync("zellij", ["action", "rename-tab", "-t", String(tabId), `${tabPrefix}${strippedName}`], {
-      stdio: "ignore",
+  writeDebugLog({ event: "mark-tab-notified-start", tabId, originalName, paneId, sessionName, deferred: Boolean(options.deferAuxiliaryWork) })
+
+  if (!effectiveTabIndicatorEnabled || paneId === null) {
+    writeDebugLog({
+      event: "mark-tab-notified-skip",
+      elapsedMs: elapsedMs(startedAt),
+      tabId,
+      paneId,
+      reason: !effectiveTabIndicatorEnabled ? "indicator-disabled" : "missing-pane-id",
     })
-    if (result.error || result.status !== 0) return
-  } catch {
     return
   }
 
-  const paneIndicatorApplied = applyPaneIndicator(sessionName, paneId, paneIndicator)
+  const strippedName = stripKnownTabPrefixes(originalName, [tabPrefix, workingPrefix])
+  const desiredName = `${tabPrefix}${strippedName}`
 
-  writePendingPaneState(sessionName, tabId, paneId, {
-    paneId,
-    updatedAt: Math.floor(Date.now() / 1000),
-    attentionAt: Math.floor(Date.now() / 1000),
-    workingAt: null,
-    paneIndicatorApplied,
-  })
+  try {
+    const renameStartedAt = process.hrtime.bigint()
+    writeDebugLog({ event: "rename-tab-start", tabId, currentName: originalName, desiredName })
+    const result = runZellijActionSync(["rename-tab", "-t", String(tabId), desiredName], {
+      sessionName,
+    })
+    writeDebugLog({
+      event: "rename-tab-end",
+      elapsedMs: elapsedMs(renameStartedAt),
+      tabId,
+      status: result.status ?? null,
+      error: result.error ? String(result.error) : null,
+    })
+    if (result.error || result.status !== 0) return
+  } catch (error) {
+    writeDebugLog({
+      event: "rename-tab-error",
+      elapsedMs: elapsedMs(startedAt),
+      tabId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return
+  }
 
-  ensureSessionPoller(sessionName, tabPrefix, workingPrefix)
+  if (options.deferAuxiliaryWork) {
+    writeDebugLog({ event: "mark-tab-notified-defer-aux", elapsedMs: elapsedMs(startedAt), tabId, paneId })
+    setTimeout(finalizeAuxiliaryWork, 0)
+    return
+  }
+
+  finalizeAuxiliaryWork()
 }
 
 /**
@@ -454,16 +932,25 @@ export function markPaneWorking(tabId: number, originalName: string, options: Ze
  * Clears the working state for the current pane. Attention state, if any, is preserved.
  */
 export function clearPaneWorking(tabId: number, options: ZellijNotifyOptions = {}): void {
+  const startedAt = process.hrtime.bigint()
   const sessionName = options.sessionName ?? process.env.ZELLIJ_SESSION_NAME ?? ""
   const originPaneId = options.originPaneId ?? Number.parseInt(process.env.ZELLIJ_PANE_ID ?? "", 10)
   const paneId = Number.isNaN(originPaneId) ? null : originPaneId
   const tabPrefix = currentTabPrefix(options.tabIndicator)
   const workingPrefix = currentWorkingPrefix(options.workingPrefix)
 
-  if (paneId === null) return
+  writeDebugLog({ event: "clear-pane-working-start", tabId, paneId, sessionName })
+
+  if (paneId === null) {
+    writeDebugLog({ event: "clear-pane-working-skip", elapsedMs: elapsedMs(startedAt), tabId, reason: "missing-pane-id" })
+    return
+  }
 
   const existing = readPendingPaneState(sessionName, tabId, paneId)
-  if (!existing) return
+  if (!existing) {
+    writeDebugLog({ event: "clear-pane-working-skip", elapsedMs: elapsedMs(startedAt), tabId, paneId, reason: "missing-state" })
+    return
+  }
 
   const nextState: PendingPaneState = {
     ...existing,
@@ -478,6 +965,7 @@ export function clearPaneWorking(tabId: number, options: ZellijNotifyOptions = {
   }
 
   ensureSessionPoller(sessionName, tabPrefix, workingPrefix)
+  writeDebugLog({ event: "clear-pane-working-end", elapsedMs: elapsedMs(startedAt), tabId, paneId })
 }
 
 /**
@@ -492,18 +980,40 @@ export async function isPaneTabActive(): Promise<boolean> {
   if (!paneId) return true
 
   try {
-    const [panesOut, tabsOut] = await Promise.all([
-      execAsync("zellij action list-panes --json"),
-      execAsync("zellij action list-tabs --json"),
-    ])
+    const numericPaneId = Number.parseInt(paneId, 10)
+    if (Number.isNaN(numericPaneId)) return true
 
-    const panes: Array<{ id: number; tab_id: number }> = JSON.parse(panesOut.stdout)
-    const tabs: Array<{ tab_id: number; active: boolean }> = JSON.parse(tabsOut.stdout)
+    const sessionName = process.env.ZELLIJ_SESSION_NAME ?? null
+    const metadataLookup = lookupPaneTabInfoFromSessionMetadata(sessionName, numericPaneId)
+    if (metadataLookup) {
+      return metadataLookup.active
+    }
 
-    const ourPane = panes.find((p) => p.id === Number(paneId))
+    const panesResult = runZellijActionSync(["list-panes", "--json"], {
+      sessionName,
+      captureOutput: true,
+      scrubEnv: true,
+    })
+    const tabsResult = runZellijActionSync(["list-tabs", "--json"], {
+      sessionName,
+      captureOutput: true,
+      scrubEnv: true,
+    })
+
+    if (panesResult.error || panesResult.status !== 0 || tabsResult.error || tabsResult.status !== 0) {
+      return true
+    }
+
+    const panesStdout = typeof panesResult.stdout === "string" ? panesResult.stdout : ""
+    const tabsStdout = typeof tabsResult.stdout === "string" ? tabsResult.stdout : ""
+    const panes: Array<{ id: number; tab_id: number; is_plugin?: boolean }> = JSON.parse(panesStdout)
+    const tabs: Array<{ tab_id: number; active: boolean }> = JSON.parse(tabsStdout)
+
+    const matchingPanes = panes.filter((entry) => entry.id === numericPaneId)
+    const ourPane = matchingPanes.find((entry) => entry.is_plugin === false) ?? matchingPanes[0]
     if (!ourPane) return true
 
-    const ourTab = tabs.find((t) => t.tab_id === ourPane.tab_id)
+    const ourTab = tabs.find((entry) => entry.tab_id === ourPane.tab_id)
     if (!ourTab) return true
 
     return ourTab.active

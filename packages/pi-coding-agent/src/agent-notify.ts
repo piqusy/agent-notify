@@ -123,9 +123,13 @@ export default function agentNotify(pi: ExtensionAPI) {
       messages: event.messages,
     })
 
-    markWorkingStop()
-
-    if (!state) return
+    // agent-notify done/question already clears working state before sending.
+    // Avoid separate detached working-stop process here to reduce end-of-run lag
+    // and remove ordering races between tab rename + notification delivery.
+    if (!state) {
+      markWorkingStop()
+      return
+    }
 
     sendNotification(state, ctx.cwd)
   })

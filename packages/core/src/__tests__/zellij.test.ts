@@ -1,3 +1,6 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { delimiter, join } from "node:path"
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 vi.mock("node:child_process", () => ({
   exec: vi.fn(),
@@ -6,7 +9,7 @@ vi.mock("node:child_process", () => ({
 }))
 
 import * as childProcess from "node:child_process"
-import { isZellijSession, markPaneWorking, markTabNotified } from "../zellij.js"
+import { getCurrentTabInfo, isZellijSession, markPaneWorking, markTabNotified } from "../zellij.js"
 
 // We mock the module-level execAsync by mocking child_process.exec
 // and then reimporting. Since Bun's ESM mock requires a factory, we
@@ -31,7 +34,62 @@ const TABS_OUR_INACTIVE = JSON.stringify([
   { tab_id: 20, name: "agent-notif", active: false },
 ])
 
+const ORIGINAL_PATH = process.env.PATH
+const ORIGINAL_HOME = process.env.HOME
+const ORIGINAL_XDG_CACHE_HOME = process.env.XDG_CACHE_HOME
+const ORIGINAL_LOCALAPPDATA = process.env.LOCALAPPDATA
+
+function installFakeZellijBinary(): string {
+  const dir = mkdtempSync(join(tmpdir(), "agent-notify-zellij-bin-"))
+  const executable = join(dir, process.platform === "win32" ? "zellij.exe" : "zellij")
+  writeFileSync(executable, "")
+  process.env.PATH = [dir, ORIGINAL_PATH ?? ""].filter(Boolean).join(delimiter)
+  return executable
+}
+
+function cleanupSessionState(sessionName: string): void {
+  rmSync(join(tmpdir(), `agent-notify-zellij-state-${sessionName}`), { recursive: true, force: true })
+}
+
+function configureTempZellijCache(sessionName: string, metadata: string): void {
+  const homeDir = mkdtempSync(join(tmpdir(), "agent-notify-zellij-home-"))
+  const cacheRoot = mkdtempSync(join(tmpdir(), "agent-notify-zellij-cache-"))
+  process.env.HOME = homeDir
+  process.env.XDG_CACHE_HOME = cacheRoot
+  process.env.LOCALAPPDATA = cacheRoot
+
+  const sessionDir = join(
+    cacheRoot,
+    "org.Zellij-Contributors.Zellij",
+    "contract_version_1",
+    "session_info",
+    sessionName,
+  )
+  mkdirSync(sessionDir, { recursive: true })
+  writeFileSync(join(sessionDir, "session-metadata.kdl"), metadata)
+}
+
 // Helper: build a fake isPaneTabActive that takes injected JSON strings
+beforeEach(() => {
+  const spawnSyncMock = childProcess.spawnSync as unknown as ReturnType<typeof vi.fn>
+  spawnSyncMock.mockReset()
+  spawnSyncMock.mockImplementation(() => ({ status: 0 }))
+
+  const spawnMock = childProcess.spawn as unknown as ReturnType<typeof vi.fn>
+  spawnMock.mockReset()
+  spawnMock.mockImplementation(() => ({ unref: vi.fn() }))
+
+  const execMock = childProcess.exec as unknown as ReturnType<typeof vi.fn>
+  execMock.mockReset()
+})
+
+afterEach(() => {
+  process.env.PATH = ORIGINAL_PATH
+  process.env.HOME = ORIGINAL_HOME
+  process.env.XDG_CACHE_HOME = ORIGINAL_XDG_CACHE_HOME
+  process.env.LOCALAPPDATA = ORIGINAL_LOCALAPPDATA
+})
+
 async function checkPaneTabActive(
   panesJson: string,
   tabsJson: string,
@@ -114,57 +172,164 @@ describe("pane tab active detection logic", () => {
   })
 })
 
+describe("getCurrentTabInfo", () => {
+  afterEach(() => {
+    delete process.env.ZELLIJ_PANE_ID
+    delete process.env.ZELLIJ_SESSION_NAME
+    vi.clearAllMocks()
+  })
+
+  it("uses session metadata and prefers non-plugin panes when ids collide", async () => {
+    const executable = installFakeZellijBinary()
+    configureTempZellijCache("test-session", `tabs {
+  tab {
+    position 2
+    name "metadata tab"
+    active false
+    tab_id 7
+  }
+  tab {
+    position 9
+    name "plugin tab"
+    active true
+    tab_id 99
+  }
+}
+panes {
+  pane {
+    id 14
+    is_plugin true
+    tab_position 9
+  }
+  pane {
+    id 14
+    is_plugin false
+    tab_position 2
+  }
+}`)
+    process.env.ZELLIJ_SESSION_NAME = "test-session"
+    process.env.ZELLIJ_PANE_ID = "14"
+
+    const spawnSyncMock = childProcess.spawnSync as unknown as { mock: { calls: unknown[][] } }
+
+    await expect(getCurrentTabInfo()).resolves.toEqual({ tabId: 7, tabName: "metadata tab" })
+    expect(spawnSyncMock).toHaveBeenCalledTimes(1)
+    expect(spawnSyncMock).toHaveBeenCalledWith(
+      executable,
+      ["--session", "test-session", "action", "save-session"],
+      expect.objectContaining({
+        stdio: "ignore",
+        env: expect.objectContaining({ PATH: process.env.PATH }),
+      }),
+    )
+  })
+
+  it("falls back to list-panes when metadata parse fails", async () => {
+    const executable = installFakeZellijBinary()
+    configureTempZellijCache("test-session", `tabs { bad`)
+    process.env.ZELLIJ_SESSION_NAME = "test-session"
+    process.env.ZELLIJ_PANE_ID = "14"
+
+    const spawnSyncMock = childProcess.spawnSync as unknown as ReturnType<typeof vi.fn>
+    spawnSyncMock.mockImplementation((command: string, args: string[]) => {
+      if (args.includes("save-session")) {
+        return { status: 0 }
+      }
+
+      if (args.includes("list-panes")) {
+        return {
+          status: 0,
+          stdout: JSON.stringify([{ id: 14, is_plugin: false, tab_id: 2, tab_name: "fallback tab" }]),
+        }
+      }
+
+      throw new Error(`unexpected command: ${command} ${args.join(" ")}`)
+    })
+
+    await expect(getCurrentTabInfo()).resolves.toEqual({ tabId: 2, tabName: "fallback tab" })
+    expect(spawnSyncMock).toHaveBeenNthCalledWith(
+      1,
+      executable,
+      ["--session", "test-session", "action", "save-session"],
+      expect.anything(),
+    )
+    expect(spawnSyncMock).toHaveBeenNthCalledWith(
+      2,
+      executable,
+      ["--session", "test-session", "action", "list-panes", "--json", "--tab"],
+      expect.objectContaining({ stdio: ["ignore", "pipe", "pipe"] }),
+    )
+  })
+})
+
 describe("markTabNotified", () => {
   afterEach(() => {
     delete process.env.ZELLIJ_PANE_ID
     delete process.env.ZELLIJ_SESSION_NAME
+    vi.useRealTimers()
+    vi.clearAllMocks()
   })
 
-  it("renames tab without shell interpolation and spawns a session poller", () => {
+  it("renames tab without shell interpolation using resolved executable", () => {
+    const executable = installFakeZellijBinary()
+    cleanupSessionState("test-session-rename")
     process.env.ZELLIJ_PANE_ID = "12"
-    process.env.ZELLIJ_SESSION_NAME = "test-session"
+    process.env.ZELLIJ_SESSION_NAME = "test-session-rename"
 
     const spawnSyncMock = childProcess.spawnSync as unknown as { mock: { calls: unknown[][] } }
-    const spawnMock = childProcess.spawn as unknown as { mock: { calls: unknown[][] } }
 
     markTabNotified(12, "$(touch /tmp/pwned)")
 
     expect(spawnSyncMock).toHaveBeenCalledWith(
-      "zellij",
-      ["action", "rename-tab", "-t", "12", " ● $(touch /tmp/pwned)"],
+      executable,
+      ["--session", "test-session-rename", "action", "rename-tab", "-t", "12", " ● $(touch /tmp/pwned)"],
       { stdio: "ignore" },
     )
-    expect(spawnMock).toHaveBeenCalled()
-    const [cmd, args, opts] = spawnMock.mock.calls[0] as any
-    expect(cmd).toBe("sh")
-    expect(args).toEqual(["-c", expect.stringContaining("run_zellij()")])
-    expect(opts.env.ATTENTION_PREFIX).toBe(" ● ")
-    expect(opts.env.WORKING_PREFIX).toBe(" ○ ")
-    expect(opts.env.SESSION_NAME).toBe("test-session")
-    expect(opts.env.STATE_DIR).toContain("agent-notify-zellij-state-test-session")
-    expect(opts.env.PID_FILE).toContain("poller.pid")
-    expect(args[1]).toContain("env -u ZELLIJ -u ZELLIJ_PANE_ID -u ZELLIJ_SESSION_NAME zellij")
-    expect(args[1]).toContain("run_zellij list-tabs --json")
-    expect(args[1]).toContain("run_zellij list-panes --json")
-    expect(args[1]).toContain("run_zellij list-clients")
-    expect(args[1]).toContain("set-pane-color --pane-id")
-    expect(args[1]).toContain('"$STATE_DIR"/tab-*')
-    expect(args[1]).toContain("paneIndicatorApplied")
-    expect(args[1]).toContain("ATTENTION_PREFIX")
-    expect(args[1]).toContain("WORKING_PREFIX")
   })
 
-  it("tracks working state with a distinct poller prefix", () => {
+  it("can defer pane-indicator work until after rename", () => {
+    const executable = installFakeZellijBinary()
+    cleanupSessionState("test-session-defer")
     process.env.ZELLIJ_PANE_ID = "12"
-    process.env.ZELLIJ_SESSION_NAME = "test-session"
+    process.env.ZELLIJ_SESSION_NAME = "test-session-defer"
+
+    const spawnSyncMock = childProcess.spawnSync as unknown as { mock: { calls: unknown[][] } }
+
+    markTabNotified(12, "api", {
+      deferAuxiliaryWork: true,
+      paneIndicator: { enabled: true, mode: "background", bg: "#333333", clearOn: "origin-pane-focus" },
+    })
+
+    expect(spawnSyncMock).toHaveBeenCalledTimes(1)
+    expect(spawnSyncMock).toHaveBeenNthCalledWith(
+      1,
+      executable,
+      ["--session", "test-session-defer", "action", "rename-tab", "-t", "12", " ● api"],
+      { stdio: "ignore" },
+    )
+    expect(spawnSyncMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("tracks working state with a distinct poller prefix using resolved executable", () => {
+    const executable = installFakeZellijBinary()
+    cleanupSessionState("test-session-working")
+    process.env.ZELLIJ_PANE_ID = "12"
+    process.env.ZELLIJ_SESSION_NAME = "test-session-working"
 
     const spawnMock = childProcess.spawn as unknown as { mock: { calls: unknown[][] } }
+    const killSpy = vi.spyOn(process, "kill").mockImplementation(() => {
+      throw new Error("not running")
+    })
 
     markPaneWorking(12, "api")
+
+    killSpy.mockRestore()
 
     expect(spawnMock).toHaveBeenCalled()
     const [, args, opts] = spawnMock.mock.calls[0] as any
     expect(args[1]).toContain("WORKING_PREFIX")
+    expect(args[1]).toContain('"$ZELLIJ_EXECUTABLE" --session "$SESSION_NAME" action "$@"')
     expect(opts.env.WORKING_PREFIX).toBe(" ○ ")
+    expect(opts.env.ZELLIJ_EXECUTABLE).toBe(executable)
   })
 })

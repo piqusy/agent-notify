@@ -22,7 +22,7 @@ vi.mock("../config.js", () => ({
       sounds: { done: null, question: null, permission: null },
       backend: null,
       zellij: {
-        tabIndicator: { enabled: true, prefix: " ● " },
+        tabIndicator: { enabled: true, prefix: " ● ", workingPrefix: " ○ " },
         paneIndicator: { enabled: false, mode: "background", bg: "#3c3836", clearOn: "origin-pane-focus" },
       },
     },
@@ -52,6 +52,22 @@ describe("notify body layout", () => {
     vi.spyOn(zellij, "isZellijSession").mockReturnValue(true)
     vi.spyOn(zellij, "isPaneTabActive").mockResolvedValue(false)
     vi.spyOn(zellij, "getCurrentTabInfo").mockResolvedValue({ tabId: 12, tabName: " ● editor" })
+    vi.spyOn(zellij, "markTabNotified").mockImplementation(() => undefined)
+    const sendNotification = vi.spyOn(platform, "sendNotification").mockResolvedValue(undefined)
+
+    await notify({ state: "done", tool: "test", cwd: process.cwd() })
+
+    const [[payload]] = (sendNotification as unknown as { mock: { calls: unknown[][] } }).mock.calls
+    expect(payload).toEqual(expect.objectContaining({
+      title: "Test — Done",
+      body: "▣  editor\n⎇  main",
+    }))
+  })
+
+  it("strips working prefix from notification body", async () => {
+    vi.spyOn(zellij, "isZellijSession").mockReturnValue(true)
+    vi.spyOn(zellij, "isPaneTabActive").mockResolvedValue(false)
+    vi.spyOn(zellij, "getCurrentTabInfo").mockResolvedValue({ tabId: 12, tabName: " ○ editor" })
     vi.spyOn(zellij, "markTabNotified").mockImplementation(() => undefined)
     const sendNotification = vi.spyOn(platform, "sendNotification").mockResolvedValue(undefined)
 

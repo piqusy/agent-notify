@@ -1,4 +1,5 @@
 import { execSync } from "node:child_process"
+import { appendFileSync } from "node:fs"
 import * as path from "node:path"
 import type { Config, NotifyPayload, NotifyResult, QuietHours, NotifyTrigger } from "./types.js"
 import type { NotifyInput } from "./types.js"
@@ -37,12 +38,14 @@ function getGitBranch(cwd: string): string | null {
   }
 }
 
-function normalizeTabName(tabName: string, tabPrefix: string): string {
-  if (tabName.startsWith(tabPrefix)) {
-    return tabName.slice(tabPrefix.length).trim()
+function normalizeTabName(tabName: string, prefixes: string[]): string {
+  for (const prefix of prefixes) {
+    if (prefix && tabName.startsWith(prefix)) {
+      return tabName.slice(prefix.length).trim()
+    }
   }
 
-  return tabName.replace(/^\s*[●◐]\s*/, "").trim()
+  return tabName.replace(/^\s*[●○◐]\s*/, "").trim()
 }
 
 function envFlagEnabled(name: string): boolean {
@@ -72,6 +75,22 @@ function buildKittyClickTarget(): { windowId?: number; listenOn?: string } | und
 
 const warnedConfigPaths = new Set<string>()
 
+function writeDebugLog(payload: Record<string, unknown>): void {
+  const file = process.env.AGENT_NOTIFY_DEBUG_LOG?.trim()
+  if (!file) return
+
+  try {
+    appendFileSync(file, `${JSON.stringify({
+      timestamp: Date.now(),
+      pid: process.pid,
+      source: "core:notify",
+      ...payload,
+    })}\n`, "utf8")
+  } catch {
+    // debug logging must never affect notification flow
+  }
+}
+
 function warnOnInvalidConfig(path: string, summary: string): void {
   if (warnedConfigPaths.has(path)) return
   warnedConfigPaths.add(path)
@@ -79,6 +98,16 @@ function warnOnInvalidConfig(path: string, summary: string): void {
 }
 
 export async function notify(input: NotifyInput): Promise<NotifyResult> {
+  const startedAt = process.hrtime.bigint()
+  const elapsedMs = () => Number(process.hrtime.bigint() - startedAt) / 1_000_000
+
+  writeDebugLog({
+    event: "notify-start",
+    tool: input.tool,
+    state: input.state,
+    trigger: input.trigger ?? input.state,
+  })
+
   const configResult = await loadConfigResult()
   const config: Config = configResult.config
 
@@ -106,17 +135,24 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
 
   // 1. Event filter — use trigger if provided, otherwise fall back to state
   const eventKey = input.trigger ?? input.state
-  if (!config.events[eventKey]) return { sent: false, reason: "event-disabled" }
+  if (!config.events[eventKey]) {
+    writeDebugLog({ event: "notify-suppressed", reason: "event-disabled", elapsedMs: elapsedMs() })
+    return { sent: false, reason: "event-disabled" }
+  }
 
   // 2. Focus check — auto-detect terminal when terminalApp is null
   if (!input.skipFocusCheck && !input.force) {
     if (resolvedTerminal !== null && await isTerminalFocused(resolvedTerminal)) {
       if (zellijSession) {
         // Inside Zellij: only suppress if our tab is the active (visible) one
-        if (await isPaneTabActive()) return { sent: false, reason: "terminal-focused" }
+        if (await isPaneTabActive()) {
+          writeDebugLog({ event: "notify-suppressed", reason: "terminal-focused", elapsedMs: elapsedMs() })
+          return { sent: false, reason: "terminal-focused" }
+        }
         // Tab not active — user is on a different tab, so notify
       } else {
         // No multiplexer: terminal focused = user is looking at it, suppress
+        writeDebugLog({ event: "notify-suppressed", reason: "terminal-focused", elapsedMs: elapsedMs() })
         return { sent: false, reason: "terminal-focused" }
       }
     }
@@ -125,16 +161,49 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
   // 3. Cooldown — checkAndUpdateCooldown returns false if on cooldown
   const file = cooldownFilePath(input.tool)
   const shouldProceed = input.force || await checkAndUpdateCooldown(file, config.cooldownSeconds)
-  if (!shouldProceed) return { sent: false, reason: "cooldown" }
+  if (!shouldProceed) {
+    writeDebugLog({ event: "notify-suppressed", reason: "cooldown", elapsedMs: elapsedMs() })
+    return { sent: false, reason: "cooldown" }
+  }
 
-  // 4. Git + tab context
+  // 4. Tab indicator — mark as early as possible after suppression checks pass.
+  // This gives Zellij more time to repaint before desktop notification appears.
+  if (tabInfo) {
+    writeDebugLog({
+      event: "tab-indicator-start",
+      elapsedMs: elapsedMs(),
+      tabId: tabInfo.tabId,
+      tabName: tabInfo.tabName,
+    })
+
+    markTabNotified(tabInfo.tabId, tabInfo.tabName, {
+      sessionName: process.env.ZELLIJ_SESSION_NAME ?? null,
+      originPaneId: Number.parseInt(process.env.ZELLIJ_PANE_ID ?? "", 10),
+      tabIndicator: config.zellij.tabIndicator,
+      paneIndicator: config.zellij.paneIndicator,
+      deferAuxiliaryWork: true,
+    })
+
+    writeDebugLog({
+      event: "tab-indicator-end",
+      elapsedMs: elapsedMs(),
+      tabId: tabInfo.tabId,
+    })
+  }
+
+  // 5. Git + tab context
   const cwd = input.cwd ?? process.cwd()
   const project = path.basename(cwd)
+  writeDebugLog({ event: "git-branch-start", elapsedMs: elapsedMs(), cwd })
   const branch = getGitBranch(cwd)
-  const tabPrefix = config.zellij.tabIndicator.prefix
-  const tabName = tabInfo ? normalizeTabName(tabInfo.tabName, tabPrefix) : project
+  writeDebugLog({ event: "git-branch-end", elapsedMs: elapsedMs(), branch: branch ?? null })
+  const tabPrefixes = [
+    config.zellij.tabIndicator.prefix,
+    config.zellij.tabIndicator.workingPrefix,
+  ].filter((value): value is string => typeof value === "string" && value.length > 0)
+  const tabName = tabInfo ? normalizeTabName(tabInfo.tabName, tabPrefixes) : project
 
-  // 5. Build payload
+  // 6. Build payload
   const TOOL_DISPLAY_NAMES: Record<string, string> = {
     cli: "CLI",
     opencode: "OpenCode",
@@ -200,18 +269,18 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
     } : {}),
   }
 
-  // 6. Zellij tab/pane indicators — mark the background tab before macOS notification shows
-  if (tabInfo) {
-    markTabNotified(tabInfo.tabId, tabInfo.tabName, {
-      sessionName: process.env.ZELLIJ_SESSION_NAME ?? null,
-      originPaneId: Number.parseInt(process.env.ZELLIJ_PANE_ID ?? "", 10),
-      tabIndicator: config.zellij.tabIndicator,
-      paneIndicator: config.zellij.paneIndicator,
-    })
-  }
-
   // 7. Send
+  writeDebugLog({
+    event: "notification-send-start",
+    elapsedMs: elapsedMs(),
+    title,
+    hasSound: Boolean(sound),
+    hasClickTarget: Boolean(payload.clickTarget),
+  })
+
   await sendNotification(payload, config)
+
+  writeDebugLog({ event: "notification-send-end", elapsedMs: elapsedMs() })
 
   return { sent: true }
 }

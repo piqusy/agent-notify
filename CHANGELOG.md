@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.9] — 2026-05-03
+
+### Added
+- Shared timing debug logs for notification delivery via `AGENT_NOTIFY_DEBUG_LOG` and `AGENT_NOTIFY_MACOS_HELPER_LOG`, making it easier to compare Zellij tab-indicator timing against helper launch timing
+
+### Changed
+- Zellij tab detection now refreshes session state from `save-session` metadata, reuses resolved Zellij executable paths in both the hot path and detached poller, and defers non-blocking pane-indicator work until after notification handoff for lower tab-indicator latency
+- Desktop notification bodies now strip Zellij attention and working indicator prefixes instead of showing those glyphs in the popup
+
+### Fixed
+- Pi visible completion notifications no longer spawn a separate `working-stop` process before `done` and `question`, reducing end-of-run ordering races between tab updates and notification delivery
+
 ## [0.2.8] — 2026-05-02
 
 ### Fixed

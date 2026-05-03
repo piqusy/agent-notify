@@ -1,4 +1,5 @@
 import { spawnSync } from "child_process";
+import { appendFileSync } from "fs";
 import type { NotifyBackend, NotifyPayload } from "../types.js";
 
 function escapeDouble(s: string): string {
@@ -12,6 +13,22 @@ function toAppleScriptStringExpr(value: string): string {
     .split("\n")
     .map((part) => `"${escapeDouble(part)}"`)
     .join(" & linefeed & ");
+}
+
+function writeDebugLog(payload: Record<string, unknown>): void {
+  const file = process.env.AGENT_NOTIFY_DEBUG_LOG?.trim();
+  if (!file) return;
+
+  try {
+    appendFileSync(file, `${JSON.stringify({
+      timestamp: Date.now(),
+      pid: process.pid,
+      source: "core:macos",
+      ...payload,
+    })}\n`, "utf8");
+  } catch {
+    // debug logging must never affect notification flow
+  }
 }
 
 function helperArgs(payload: NotifyPayload): string[] {
@@ -44,14 +61,38 @@ export function sendMacOS(
 ): void {
   try {
     if (backend === "macos-helper") {
-      if (!options.helperAppPath) return;
-      spawnSync("open", ["-n", options.helperAppPath, "--args", ...helperArgs(payload)], { stdio: "ignore" });
+      if (!options.helperAppPath) {
+        writeDebugLog({ event: "macos-helper-skip", reason: "missing-helper-app-path" });
+        return;
+      }
+
+      writeDebugLog({
+        event: "macos-helper-launch-start",
+        title: payload.title,
+        hasSound: Boolean(payload.sound),
+        hasClickTarget: Boolean(payload.clickTarget),
+      });
+
+      const result = spawnSync("open", ["-n", options.helperAppPath, "--args", ...helperArgs(payload)], { stdio: "ignore" });
+
+      writeDebugLog({
+        event: "macos-helper-launch-end",
+        status: result.status ?? null,
+        error: result.error ? String(result.error) : null,
+      });
     } else {
       const sound = payload.sound ? ` sound name ${toAppleScriptStringExpr(payload.sound)}` : "";
       const script = `display notification ${toAppleScriptStringExpr(payload.body)} with title ${toAppleScriptStringExpr(payload.title)}${sound}`;
-      spawnSync("osascript", ["-e", script], { stdio: "ignore" });
+      writeDebugLog({ event: "osascript-launch-start", title: payload.title, hasSound: Boolean(payload.sound) });
+      const result = spawnSync("osascript", ["-e", script], { stdio: "ignore" });
+      writeDebugLog({
+        event: "osascript-launch-end",
+        status: result.status ?? null,
+        error: result.error ? String(result.error) : null,
+      });
     }
-  } catch {
+  } catch (error) {
+    writeDebugLog({ event: "macos-send-error", error: error instanceof Error ? error.message : String(error) });
     // swallow errors — notifications are best-effort
   }
 }
