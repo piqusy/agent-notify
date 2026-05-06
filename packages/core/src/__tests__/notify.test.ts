@@ -91,7 +91,7 @@ describe("notify integration (skip in CI — uses real config/fs)", () => {
   it("marks zellij tab before sending macOS notification", async () => {
     vi.spyOn(zellij, "isZellijSession").mockReturnValue(true)
     vi.spyOn(zellij, "isPaneTabActive").mockResolvedValue(false)
-    vi.spyOn(zellij, "getCurrentTabInfo").mockResolvedValue({ tabId: 12, tabName: "agent-notify" })
+    vi.spyOn(zellij, "getCurrentTabInfo").mockResolvedValue({ tabId: 12, tabName: "agent-notify", visibleTabName: "agent-notify" })
     vi.spyOn(zellij, "markTabNotified").mockImplementation(() => undefined)
     vi.spyOn(platform, "sendNotification").mockResolvedValue(undefined)
 
@@ -110,7 +110,7 @@ describe("notify integration (skip in CI — uses real config/fs)", () => {
 
     vi.spyOn(zellij, "isZellijSession").mockReturnValue(true)
     vi.spyOn(zellij, "isPaneTabActive").mockResolvedValue(false)
-    vi.spyOn(zellij, "getCurrentTabInfo").mockResolvedValue({ tabId: 12, tabName: "agent-notify" })
+    vi.spyOn(zellij, "getCurrentTabInfo").mockResolvedValue({ tabId: 12, tabName: "agent-notify", visibleTabName: "agent-notify" })
     vi.spyOn(zellij, "markTabNotified").mockImplementation(() => undefined)
     vi.spyOn(platform, "sendNotification").mockResolvedValue(undefined)
 
@@ -212,7 +212,7 @@ describe("notify integration (skip in CI — uses real config/fs)", () => {
 
     vi.spyOn(zellij, "isZellijSession").mockReturnValue(true)
     vi.spyOn(zellij, "isPaneTabActive").mockResolvedValue(false)
-    vi.spyOn(zellij, "getCurrentTabInfo").mockResolvedValue({ tabId: 12, tabName: " ● api" })
+    vi.spyOn(zellij, "getCurrentTabInfo").mockResolvedValue({ tabId: 12, tabName: " ● api", visibleTabName: " ● api" })
     vi.spyOn(zellij, "markTabNotified").mockImplementation(() => undefined)
     const sendNotification = vi.spyOn(platform, "sendNotification").mockResolvedValue(undefined)
 

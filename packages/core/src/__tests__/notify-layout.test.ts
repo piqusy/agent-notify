@@ -51,7 +51,7 @@ describe("notify body layout", () => {
   it("uses separate compact rows for zellij tab and branch", async () => {
     vi.spyOn(zellij, "isZellijSession").mockReturnValue(true)
     vi.spyOn(zellij, "isPaneTabActive").mockResolvedValue(false)
-    vi.spyOn(zellij, "getCurrentTabInfo").mockResolvedValue({ tabId: 12, tabName: " ● editor" })
+    vi.spyOn(zellij, "getCurrentTabInfo").mockResolvedValue({ tabId: 12, tabName: " ● editor", visibleTabName: " ● editor" })
     vi.spyOn(zellij, "markTabNotified").mockImplementation(() => undefined)
     const sendNotification = vi.spyOn(platform, "sendNotification").mockResolvedValue(undefined)
 
@@ -67,7 +67,7 @@ describe("notify body layout", () => {
   it("strips working prefix from notification body", async () => {
     vi.spyOn(zellij, "isZellijSession").mockReturnValue(true)
     vi.spyOn(zellij, "isPaneTabActive").mockResolvedValue(false)
-    vi.spyOn(zellij, "getCurrentTabInfo").mockResolvedValue({ tabId: 12, tabName: " ○ editor" })
+    vi.spyOn(zellij, "getCurrentTabInfo").mockResolvedValue({ tabId: 12, tabName: " ○ editor", visibleTabName: " ○ editor" })
     vi.spyOn(zellij, "markTabNotified").mockImplementation(() => undefined)
     const sendNotification = vi.spyOn(platform, "sendNotification").mockResolvedValue(undefined)
 
@@ -77,6 +77,21 @@ describe("notify body layout", () => {
     expect(payload).toEqual(expect.objectContaining({
       title: "Test — Done",
       body: "▣  editor\n⎇  main",
+    }))
+  })
+
+  it("uses the visible zellij tab name for auto-named tabs", async () => {
+    vi.spyOn(zellij, "isZellijSession").mockReturnValue(true)
+    vi.spyOn(zellij, "isPaneTabActive").mockResolvedValue(false)
+    vi.spyOn(zellij, "getCurrentTabInfo").mockResolvedValue({ tabId: 22, tabName: "Tab #23", visibleTabName: "π - agent-notify" })
+    vi.spyOn(zellij, "markTabNotified").mockImplementation(() => undefined)
+    const sendNotification = vi.spyOn(platform, "sendNotification").mockResolvedValue(undefined)
+
+    await notify({ state: "done", tool: "test", cwd: process.cwd() })
+
+    const [[payload]] = (sendNotification as unknown as { mock: { calls: unknown[][] } }).mock.calls
+    expect(payload).toEqual(expect.objectContaining({
+      body: "▣  π - agent-notify\n⎇  main",
     }))
   })
 

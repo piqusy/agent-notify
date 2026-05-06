@@ -65,13 +65,14 @@ describe("notify CLI commands", () => {
     process.env.ZELLIJ_SESSION_NAME = "test-session"
     process.env.ZELLIJ_PANE_ID = "11"
     isZellijSessionMock.mockReturnValue(true)
-    getCurrentTabInfoMock.mockResolvedValueOnce({ tabId: 7, tabName: "api" } as never)
+    getCurrentTabInfoMock.mockResolvedValueOnce({ tabId: 7, tabName: "api", visibleTabName: "api" } as never)
 
     await cmdWorkingStart()
 
     expect(markPaneWorkingMock).toHaveBeenCalledWith(7, "api", {
       sessionName: "test-session",
       originPaneId: 11,
+      visibleTabName: "api",
     })
   })
 
@@ -79,7 +80,7 @@ describe("notify CLI commands", () => {
     process.env.ZELLIJ_SESSION_NAME = "test-session"
     process.env.ZELLIJ_PANE_ID = "11"
     isZellijSessionMock.mockReturnValue(true)
-    getCurrentTabInfoMock.mockResolvedValueOnce({ tabId: 7, tabName: "api" } as never)
+    getCurrentTabInfoMock.mockResolvedValueOnce({ tabId: 7, tabName: "api", visibleTabName: "api" } as never)
 
     await cmdWorkingStop()
 

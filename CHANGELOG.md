@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.10] — 2026-05-05
+
+### Fixed
+- Auto-named Zellij tabs now keep their visible pane-derived titles while attention and working indicators are shown, instead of falling back to raw `Tab #N` names
+- Zellij session pollers now version their on-disk state and restart when the indicator payload shape changes, preventing stale background pollers from overwriting newer tab-title behavior after upgrades
+
 ## [0.2.9] — 2026-05-03
 
 ### Added

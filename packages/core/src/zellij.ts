@@ -6,9 +6,13 @@ import type { Config } from "./types.js"
 
 const ZELLIJ_STATE_PREFIX = "agent-notify-zellij-state"
 const POLLER_PID_FILE = "poller.pid"
+const POLLER_VERSION_FILE = "poller.version"
+const CURRENT_POLLER_VERSION = "2"
 
 const TAB_NOTIFY_PREFIX = " ● "
 const TAB_WORKING_PREFIX = " ○ "
+const AUTO_TAB_NAME_PATTERN = /^Tab #\d+$/
+const GENERIC_TAB_PREFIX_PATTERN = /^\s*(?:[○●◐]\s*)+/
 
 function writeDebugLog(payload: Record<string, unknown>): void {
   const file = process.env.AGENT_NOTIFY_DEBUG_LOG?.trim()
@@ -37,6 +41,13 @@ export type ZellijNotifyOptions = {
   paneIndicator?: Config["zellij"]["paneIndicator"]
   workingPrefix?: string
   deferAuxiliaryWork?: boolean
+  visibleTabName?: string | null
+}
+
+export type CurrentTabInfo = {
+  tabId: number
+  tabName: string
+  visibleTabName: string
 }
 
 type PendingPaneState = {
@@ -45,6 +56,8 @@ type PendingPaneState = {
   attentionAt: number | null
   workingAt: number | null
   paneIndicatorApplied: boolean
+  indicatorTabName: string | null
+  restoreTabName: string | null
 }
 
 function sanitizeName(value: string): string {
@@ -67,6 +80,10 @@ function pollerPidFile(sessionName: string | null | undefined): string {
   return join(sessionStateDir(sessionName), POLLER_PID_FILE)
 }
 
+function pollerVersionFile(sessionName: string | null | undefined): string {
+  return join(sessionStateDir(sessionName), POLLER_VERSION_FILE)
+}
+
 function currentTabPrefix(tabIndicator: Config["zellij"]["tabIndicator"] | undefined): string {
   return tabIndicator?.prefix ?? TAB_NOTIFY_PREFIX
 }
@@ -82,7 +99,26 @@ function stripKnownTabPrefixes(tabName: string, prefixes: string[]): string {
     }
   }
 
-  return tabName.replace(/^\s*[●○]\s*/, "")
+  return tabName.replace(/^\s*[●○◐]\s*/, "")
+}
+
+function stripGenericTabPrefixes(tabName: string): string {
+  return tabName.replace(GENERIC_TAB_PREFIX_PATTERN, "")
+}
+
+function isAutoTabName(tabName: string): boolean {
+  return AUTO_TAB_NAME_PATTERN.test(stripGenericTabPrefixes(tabName).trim())
+}
+
+function resolveVisibleTabName(rawTabName: string, paneTitle: string | null | undefined, prefixes: string[]): string {
+  const strippedTabName = stripGenericTabPrefixes(stripKnownTabPrefixes(rawTabName, prefixes)).trim()
+  if (!isAutoTabName(strippedTabName)) return strippedTabName
+
+  const strippedPaneTitle = typeof paneTitle === "string"
+    ? stripGenericTabPrefixes(stripKnownTabPrefixes(paneTitle, prefixes)).trim()
+    : ""
+
+  return strippedPaneTitle || strippedTabName
 }
 
 function scrubbedZellijEnv(extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
@@ -472,6 +508,8 @@ function readPendingPaneState(
       attentionAt: typeof parsed.attentionAt === "number" ? parsed.attentionAt : null,
       workingAt: typeof parsed.workingAt === "number" ? parsed.workingAt : null,
       paneIndicatorApplied: Boolean(parsed.paneIndicatorApplied),
+      indicatorTabName: typeof parsed.indicatorTabName === "string" ? parsed.indicatorTabName : null,
+      restoreTabName: typeof parsed.restoreTabName === "string" ? parsed.restoreTabName : null,
     }
   } catch {
     return null
@@ -515,6 +553,17 @@ function readPollerPid(sessionName: string | null): number | null {
   }
 }
 
+function readPollerVersion(sessionName: string | null): string | null {
+  const file = pollerVersionFile(sessionName)
+  if (!existsSync(file)) return null
+
+  try {
+    return readFileSync(file, "utf8").trim() || null
+  } catch {
+    return null
+  }
+}
+
 function isPidRunning(pid: number | null): boolean {
   if (!pid) return false
 
@@ -526,13 +575,25 @@ function isPidRunning(pid: number | null): boolean {
   }
 }
 
+function stopPoller(pid: number): void {
+  if (!isPidRunning(pid)) return
+
+  try {
+    process.kill(pid, "SIGTERM")
+  } catch {
+    // best effort only
+  }
+}
+
 function ensureSessionPoller(sessionName: string | null, attentionPrefix: string, workingPrefix: string): void {
   const startedAt = process.hrtime.bigint()
   const pid = readPollerPid(sessionName)
-  if (isPidRunning(pid)) {
-    writeDebugLog({ event: "poller-skip-existing", elapsedMs: elapsedMs(startedAt), sessionName, pid })
+  const pollerVersion = readPollerVersion(sessionName)
+  if (isPidRunning(pid) && pollerVersion === CURRENT_POLLER_VERSION) {
+    writeDebugLog({ event: "poller-skip-existing", elapsedMs: elapsedMs(startedAt), sessionName, pid, pollerVersion })
     return
   }
+  if (pid !== null && isPidRunning(pid)) stopPoller(pid)
 
   const executable = resolveZellijExecutable()
   const dir = sessionStateDir(sessionName)
@@ -553,18 +614,22 @@ strip_prefix() {
   case "$name" in
     "$ATTENTION_PREFIX"*) printf '%s' "\${name#"$ATTENTION_PREFIX"}" ;;
     "$WORKING_PREFIX"*) printf '%s' "\${name#"$WORKING_PREFIX"}" ;;
-    *) printf '%s' "$name" | sed -E 's/^[[:space:]]*[●○][[:space:]]*//' ;;
+    *) printf '%s' "$name" | sed -E 's/^[[:space:]]*[●○◐][[:space:]]*//' ;;
   esac
 }
 rename_tab_for_state() {
   tab_id="$1"
   current_name="$2"
   desired_state="$3"
+  indicator_name="$4"
+  restore_name="$5"
   stripped_name="$(strip_prefix "$current_name")"
+  [ -n "$indicator_name" ] || indicator_name="$stripped_name"
+  [ -n "$restore_name" ] || restore_name="$stripped_name"
   case "$desired_state" in
-    attention) desired_name="$ATTENTION_PREFIX$stripped_name" ;;
-    working) desired_name="$WORKING_PREFIX$stripped_name" ;;
-    none) desired_name="$stripped_name" ;;
+    attention) desired_name="$ATTENTION_PREFIX$indicator_name" ;;
+    working) desired_name="$WORKING_PREFIX$indicator_name" ;;
+    none) desired_name="$restore_name" ;;
     *) desired_name="$current_name" ;;
   esac
 
@@ -573,7 +638,7 @@ rename_tab_for_state() {
   fi
 }
 cleanup() {
-  rm -f "$PID_FILE"
+  rm -f "$PID_FILE" "$VERSION_FILE"
   rmdir "$STATE_DIR" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
@@ -589,6 +654,9 @@ while :; do
     tab_id="\${tab_name#tab-}"
     has_attention=false
     has_working=false
+    latest_updated_at=0
+    selected_indicator_name=""
+    selected_restore_name=""
     for pane_file in "$tab_dir"/pane-*.json; do
       [ -f "$pane_file" ] || continue
       pane_name="$(basename "$pane_file")"
@@ -632,6 +700,16 @@ while :; do
       elif [ -n "$working_at" ]; then
         has_working=true
       fi
+
+      updated_at="$(jq -r '.updatedAt // 0' "$pane_file" 2>/dev/null || echo 0)"
+      case "$updated_at" in
+        ''|*[!0-9]*) updated_at=0 ;;
+      esac
+      if [ "$updated_at" -ge "$latest_updated_at" ]; then
+        latest_updated_at="$updated_at"
+        selected_indicator_name="$(jq -r '.indicatorTabName // empty' "$pane_file" 2>/dev/null || true)"
+        selected_restore_name="$(jq -r '.restoreTabName // empty' "$pane_file" 2>/dev/null || true)"
+      fi
     done
 
     remaining=false
@@ -642,6 +720,14 @@ while :; do
     done
 
     current_tab_name="$(printf '%s' "$tabs_json" | jq -r --argjson tabId "$tab_id" '.[] | select(.tab_id == $tabId) | .name' 2>/dev/null | head -n 1 || true)"
+    restore_tab_name="$selected_restore_name"
+    indicator_tab_name="$selected_indicator_name"
+    if [ -z "$restore_tab_name" ] && [ -n "$current_tab_name" ]; then
+      restore_tab_name="$(strip_prefix "$current_tab_name")"
+    fi
+    if [ -z "$indicator_tab_name" ]; then
+      indicator_tab_name="$restore_tab_name"
+    fi
 
     desired_state=none
     if [ "$has_attention" = true ]; then
@@ -655,7 +741,7 @@ while :; do
     fi
 
     if [ -n "$current_tab_name" ]; then
-      rename_tab_for_state "$tab_id" "$current_tab_name" "$desired_state"
+      rename_tab_for_state "$tab_id" "$current_tab_name" "$desired_state" "$indicator_tab_name" "$restore_tab_name"
     fi
 
     if [ "$remaining" = false ]; then
@@ -677,6 +763,7 @@ done
       ...process.env,
       STATE_DIR: dir,
       PID_FILE: pollerPidFile(sessionName),
+      VERSION_FILE: pollerVersionFile(sessionName),
       SESSION_NAME: sessionName ?? "",
       ZELLIJ_EXECUTABLE: executable,
       ATTENTION_PREFIX: attentionPrefix,
@@ -685,6 +772,7 @@ done
   })
 
   writeFileSync(pollerPidFile(sessionName), String(child.pid ?? ""), "utf8")
+  writeFileSync(pollerVersionFile(sessionName), CURRENT_POLLER_VERSION, "utf8")
   child.unref()
   writeDebugLog({ event: "poller-end", elapsedMs: elapsedMs(startedAt), sessionName, pid: child.pid ?? null })
 }
@@ -698,9 +786,9 @@ export function isZellijSession(): boolean {
 }
 
 /**
- * Returns the current pane's tab ID and name, or null if unavailable.
+ * Returns the current pane's raw tab name plus the best visible name for notifications/indicators.
  */
-export async function getCurrentTabInfo(): Promise<{ tabId: number; tabName: string } | null> {
+export async function getCurrentTabInfo(): Promise<CurrentTabInfo | null> {
   const startedAt = process.hrtime.bigint()
   const paneId = process.env.ZELLIJ_PANE_ID
   if (!paneId) {
@@ -718,17 +806,22 @@ export async function getCurrentTabInfo(): Promise<{ tabId: number; tabName: str
     }
 
     const sessionName = process.env.ZELLIJ_SESSION_NAME ?? null
+    const prefixes = [TAB_NOTIFY_PREFIX, TAB_WORKING_PREFIX]
     const metadataLookup = lookupPaneTabInfoFromSessionMetadata(sessionName, numericPaneId)
-    if (metadataLookup) {
+    const shouldReadPanes = !metadataLookup || isAutoTabName(metadataLookup.tabName)
+
+    if (!shouldReadPanes && metadataLookup) {
+      const visibleTabName = resolveVisibleTabName(metadataLookup.tabName, null, prefixes)
       writeDebugLog({
         event: "get-current-tab-info-end",
         elapsedMs: elapsedMs(startedAt),
         paneId,
         tabId: metadataLookup.tabId,
         tabName: metadataLookup.tabName,
+        visibleTabName,
         sourceKind: "session-metadata",
       })
-      return { tabId: metadataLookup.tabId, tabName: metadataLookup.tabName }
+      return { tabId: metadataLookup.tabId, tabName: metadataLookup.tabName, visibleTabName }
     }
 
     const panesStartedAt = process.hrtime.bigint()
@@ -746,28 +839,59 @@ export async function getCurrentTabInfo(): Promise<{ tabId: number; tabName: str
       error: panesResult.error ? String(panesResult.error) : null,
     })
 
-    if (panesResult.error || panesResult.status !== 0) {
+    if (panesResult.error || panesResult.status !== 0 || panesStdout.length === 0) {
+      if (metadataLookup) {
+        const visibleTabName = resolveVisibleTabName(metadataLookup.tabName, null, prefixes)
+        writeDebugLog({
+          event: "get-current-tab-info-end",
+          elapsedMs: elapsedMs(startedAt),
+          paneId,
+          tabId: metadataLookup.tabId,
+          tabName: metadataLookup.tabName,
+          visibleTabName,
+          sourceKind: "session-metadata",
+        })
+        return { tabId: metadataLookup.tabId, tabName: metadataLookup.tabName, visibleTabName }
+      }
       return null
     }
 
-    const panes: Array<{ id: number; tab_id: number; tab_name?: string; is_plugin?: boolean }> = JSON.parse(panesStdout)
+    const panes: Array<{ id: number; tab_id: number; tab_name?: string; title?: string; is_plugin?: boolean }> = JSON.parse(panesStdout)
     const matchingPanes = panes.filter((entry) => entry.id === numericPaneId)
-    const ourPane = matchingPanes.find((entry) => entry.is_plugin === false) ?? matchingPanes[0]
+    const ourPane = matchingPanes.find((entry) => entry.is_plugin === false) ?? matchingPanes[0] ?? null
+    const paneTitle = typeof ourPane?.title === "string" ? ourPane.title : null
+
+    if (metadataLookup) {
+      const visibleTabName = resolveVisibleTabName(metadataLookup.tabName, paneTitle, prefixes)
+      writeDebugLog({
+        event: "get-current-tab-info-end",
+        elapsedMs: elapsedMs(startedAt),
+        paneId,
+        tabId: metadataLookup.tabId,
+        tabName: metadataLookup.tabName,
+        visibleTabName,
+        sourceKind: paneTitle ? "session-metadata+panes" : "session-metadata",
+      })
+      return { tabId: metadataLookup.tabId, tabName: metadataLookup.tabName, visibleTabName }
+    }
+
     if (!ourPane) {
       writeDebugLog({ event: "get-current-tab-info-miss", elapsedMs: elapsedMs(startedAt), reason: "pane-not-found", paneId })
       return null
     }
 
     if (typeof ourPane.tab_name === "string" && ourPane.tab_name.length > 0) {
+      const visibleTabName = resolveVisibleTabName(ourPane.tab_name, paneTitle, prefixes)
       writeDebugLog({
         event: "get-current-tab-info-end",
         elapsedMs: elapsedMs(startedAt),
         paneId,
         tabId: ourPane.tab_id,
         tabName: ourPane.tab_name,
+        visibleTabName,
         sourceKind: "panes",
       })
-      return { tabId: ourPane.tab_id, tabName: ourPane.tab_name }
+      return { tabId: ourPane.tab_id, tabName: ourPane.tab_name, visibleTabName }
     }
 
     const tabsStartedAt = process.hrtime.bigint()
@@ -796,16 +920,18 @@ export async function getCurrentTabInfo(): Promise<{ tabId: number; tabName: str
       return null
     }
 
+    const visibleTabName = resolveVisibleTabName(ourTab.name, paneTitle, prefixes)
     writeDebugLog({
       event: "get-current-tab-info-end",
       elapsedMs: elapsedMs(startedAt),
       paneId,
       tabId: ourTab.tab_id,
       tabName: ourTab.name,
+      visibleTabName,
       sourceKind: "tabs",
     })
 
-    return { tabId: ourTab.tab_id, tabName: ourTab.name }
+    return { tabId: ourTab.tab_id, tabName: ourTab.name, visibleTabName }
   } catch (error) {
     writeDebugLog({
       event: "get-current-tab-info-error",
@@ -830,6 +956,8 @@ export function markTabNotified(tabId: number, originalName: string, options: Ze
   const workingPrefix = currentWorkingPrefix(options.workingPrefix)
   const paneIndicator = options.paneIndicator
   const effectiveTabIndicatorEnabled = (options.tabIndicator?.enabled ?? true) || Boolean(paneIndicator?.enabled)
+  const restoreTabName = stripKnownTabPrefixes(originalName, [tabPrefix, workingPrefix]).trim()
+  const indicatorTabName = resolveVisibleTabName(originalName, options.visibleTabName, [tabPrefix, workingPrefix])
   const finalizeAuxiliaryWork = () => {
     const paneIndicatorApplied = paneId === null ? false : applyPaneIndicator(sessionName, paneId, paneIndicator)
 
@@ -840,6 +968,8 @@ export function markTabNotified(tabId: number, originalName: string, options: Ze
         attentionAt: Math.floor(Date.now() / 1000),
         workingAt: null,
         paneIndicatorApplied,
+        indicatorTabName,
+        restoreTabName,
       })
     }
 
@@ -860,8 +990,7 @@ export function markTabNotified(tabId: number, originalName: string, options: Ze
     return
   }
 
-  const strippedName = stripKnownTabPrefixes(originalName, [tabPrefix, workingPrefix])
-  const desiredName = `${tabPrefix}${strippedName}`
+  const desiredName = `${tabPrefix}${indicatorTabName}`
 
   try {
     const renameStartedAt = process.hrtime.bigint()
@@ -909,6 +1038,8 @@ export function markPaneWorking(tabId: number, originalName: string, options: Ze
 
   if (paneId === null) return
 
+  const restoreTabName = stripKnownTabPrefixes(originalName, [tabPrefix, workingPrefix]).trim()
+  const indicatorTabName = resolveVisibleTabName(originalName, options.visibleTabName, [tabPrefix, workingPrefix])
   const existing = readPendingPaneState(sessionName, tabId, paneId)
   if (existing?.paneIndicatorApplied) {
     clearPaneIndicator(sessionName, paneId)
@@ -920,11 +1051,12 @@ export function markPaneWorking(tabId: number, originalName: string, options: Ze
     attentionAt: null,
     workingAt: Math.floor(Date.now() / 1000),
     paneIndicatorApplied: false,
+    indicatorTabName,
+    restoreTabName,
   })
 
-  // Preserve the current visible name. The poller will derive the correct tab-level state,
-  // including attention > working precedence across multiple panes.
-  void originalName
+  // Preserve the current visible name in state. The poller derives the correct tab-level
+  // state, including attention > working precedence across multiple panes.
   ensureSessionPoller(sessionName, tabPrefix, workingPrefix)
 }
 

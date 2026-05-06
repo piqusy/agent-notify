@@ -182,6 +182,7 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
       tabIndicator: config.zellij.tabIndicator,
       paneIndicator: config.zellij.paneIndicator,
       deferAuxiliaryWork: true,
+      visibleTabName: tabInfo.visibleTabName,
     })
 
     writeDebugLog({
@@ -201,7 +202,7 @@ export async function notify(input: NotifyInput): Promise<NotifyResult> {
     config.zellij.tabIndicator.prefix,
     config.zellij.tabIndicator.workingPrefix,
   ].filter((value): value is string => typeof value === "string" && value.length > 0)
-  const tabName = tabInfo ? normalizeTabName(tabInfo.tabName, tabPrefixes) : project
+  const tabName = tabInfo ? normalizeTabName(tabInfo.visibleTabName, tabPrefixes) : project
 
   // 6. Build payload
   const TOOL_DISPLAY_NAMES: Record<string, string> = {

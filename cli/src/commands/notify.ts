@@ -45,7 +45,10 @@ export async function cmdWorkingStart(): Promise<void> {
   if (!isZellijSession()) return
   const tabInfo = await getCurrentTabInfo()
   if (!tabInfo) return
-  markPaneWorking(tabInfo.tabId, tabInfo.tabName, currentZellijOptions())
+  markPaneWorking(tabInfo.tabId, tabInfo.tabName, {
+    ...currentZellijOptions(),
+    visibleTabName: tabInfo.visibleTabName,
+  })
 }
 
 export async function cmdWorkingStop(): Promise<void> {
