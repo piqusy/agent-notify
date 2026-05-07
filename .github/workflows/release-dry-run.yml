@@ -1,0 +1,111 @@
+name: Release Dry Run
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to preview without leading v
+        required: true
+        default: 0.2.11
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  preview-release:
+    name: Preview Release Notes
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      RELEASE_TAG: v${{ inputs.version }}
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.13
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Validate version input
+        run: |
+          VERSION="${{ inputs.version }}"
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+            || { echo "Invalid version: $VERSION" >&2; exit 1; }
+
+      - name: Check release files
+        run: node scripts/check-release.mjs
+        env:
+          RELEASE_TAG: ${{ env.RELEASE_TAG }}
+
+      - name: Build custom release body preview
+        run: |
+          cat > release-body.md <<'EOF'
+          ## Install via Homebrew (macOS)
+
+          Homebrew publishing runs in a separate workflow after this GitHub Release is created.
+
+          ```sh
+          brew tap piqusy/tap
+          brew install agent-notify
+          ```
+
+          For exact historical versions, use the standalone assets attached to this release.
+
+          ## Standalone binaries
+
+          Download the asset matching your OS/CPU from this release:
+
+          - macOS: `agent-notify-darwin-arm64.tar.gz`, `agent-notify-darwin-x64.tar.gz`
+          - Linux: `agent-notify-linux-arm64.tar.gz`, `agent-notify-linux-x64.tar.gz`
+          - Windows: `agent-notify-windows-x64.zip`
+
+          Release archives and checksums are attached below.
+          EOF
+
+      - name: Generate GitHub release notes preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PREVIOUS_TAG="$(git tag --sort=-version:refname | grep -vx "$RELEASE_TAG" | head -1 || true)"
+
+          if [ -n "$PREVIOUS_TAG" ]; then
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
+              -f tag_name="$RELEASE_TAG" \
+              -f target_commitish="$GITHUB_SHA" \
+              -f previous_tag_name="$PREVIOUS_TAG" \
+              --jq '.body' > release-generated-notes.md
+          else
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
+              -f tag_name="$RELEASE_TAG" \
+              -f target_commitish="$GITHUB_SHA" \
+              --jq '.body' > release-generated-notes.md
+          fi
+
+      - name: Combine release notes preview
+        run: |
+          cp release-body.md release-notes-preview.md
+          printf '\n' >> release-notes-preview.md
+          cat release-generated-notes.md >> release-notes-preview.md
+
+      - name: Upload preview artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-preview-${{ env.RELEASE_TAG }}
+          path: |
+            release-body.md
+            release-generated-notes.md
+            release-notes-preview.md
+
+      - name: Add workflow summary
+        run: |
+          echo "## Release preview $RELEASE_TAG" >> "$GITHUB_STEP_SUMMARY"
+          echo >> "$GITHUB_STEP_SUMMARY"
+          cat release-notes-preview.md >> "$GITHUB_STEP_SUMMARY"
