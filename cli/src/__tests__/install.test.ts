@@ -17,6 +17,7 @@ function write(path: string, content: string): string {
 function createAssets(root: string) {
   return {
     claudeCode: {
+      userPromptSubmit: write(join(root, "assets", "claude-code", "user_prompt_submit.sh"), "#!/usr/bin/env bash\n"),
       stop: write(join(root, "assets", "claude-code", "stop.sh"), "#!/usr/bin/env bash\n"),
       notification: write(join(root, "assets", "claude-code", "notification.sh"), "#!/usr/bin/env bash\n"),
       permissionRequest: write(join(root, "assets", "claude-code", "permission_request.sh"), "#!/usr/bin/env bash\n"),
@@ -55,6 +56,7 @@ describe("integration installers", () => {
     expect(messages.some((message) => message.includes("OpenCode plugin installed"))).toBe(true)
     expect(messages.some((message) => message.includes("Pi extension installed"))).toBe(true)
 
+    expect(existsSync(join(root, ".claude", "hooks", "agent-notify", "user_prompt_submit.sh"))).toBe(true)
     expect(existsSync(join(root, ".claude", "hooks", "agent-notify", "stop.sh"))).toBe(true)
     expect(existsSync(join(root, ".config", "opencode", "plugins", "opencode-agent-notify", "index.js"))).toBe(true)
     expect(existsSync(join(root, ".pi", "agent", "extensions", "agent-notify.ts"))).toBe(true)
@@ -62,6 +64,7 @@ describe("integration installers", () => {
     const claudeSettings = JSON.parse(readFileSync(join(root, ".claude", "settings.json"), "utf8")) as {
       hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>
     }
+    expect(claudeSettings.hooks.UserPromptSubmit[0].hooks[0].command).toContain(".claude/hooks/agent-notify/user_prompt_submit.sh")
     expect(claudeSettings.hooks.Stop[0].hooks[0].command).toContain(".claude/hooks/agent-notify/stop.sh")
 
     const opencodeConfig = JSON.parse(readFileSync(join(root, ".config", "opencode", "opencode.json"), "utf8")) as {
@@ -96,6 +99,33 @@ describe("integration installers", () => {
     expect(claudeSettings.hooks.Stop[0].hooks[0].command).toContain(".claude/hooks/agent-notify/stop.sh")
   })
 
+  it("replaces inline Claude Code agent-notify commands with bundled hook scripts", () => {
+    const root = makeTempDir()
+    dirs.push(root)
+    const assets = createAssets(root)
+    const configPath = join(root, ".config", "agent-notify", "config.json")
+
+    write(join(root, ".claude", "settings.json"), JSON.stringify({
+      hooks: {
+        UserPromptSubmit: [{ hooks: [{ type: "command", command: "agent-notify working-start" }] }],
+        Stop: [{ matcher: "", hooks: [{ type: "command", command: "agent-notify done \"$PWD\"" }] }],
+        Notification: [{ matcher: "", hooks: [{ type: "command", command: "agent-notify question \"$PWD\"" }] }],
+        PermissionRequest: [{ matcher: "*", hooks: [{ type: "command", command: "agent-notify question \"$PWD\"" }] }],
+      },
+    }, null, 2))
+
+    installTargets("claude-code", { homeDir: root, assets, configPath })
+
+    const claudeSettings = JSON.parse(readFileSync(join(root, ".claude", "settings.json"), "utf8")) as {
+      hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>
+    }
+
+    expect(claudeSettings.hooks.UserPromptSubmit[0].hooks[0].command).toContain(".claude/hooks/agent-notify/user_prompt_submit.sh")
+    expect(claudeSettings.hooks.Stop[0].hooks[0].command).toContain(".claude/hooks/agent-notify/stop.sh")
+    expect(claudeSettings.hooks.Notification[0].hooks[0].command).toContain(".claude/hooks/agent-notify/notification.sh")
+    expect(claudeSettings.hooks.PermissionRequest[0].hooks[0].command).toContain(".claude/hooks/agent-notify/permission_request.sh")
+  })
+
   it("uninstalls all integrations from a temp home", () => {
     const root = makeTempDir()
     dirs.push(root)
@@ -126,6 +156,7 @@ describe("integration installers", () => {
     const root = makeTempDir()
     dirs.push(root)
 
+    write(join(root, "packages", "claude-code", "hooks", "user_prompt_submit.sh"), "#!/usr/bin/env bash\necho pwned\n")
     write(join(root, "packages", "claude-code", "hooks", "stop.sh"), "#!/usr/bin/env bash\necho pwned\n")
     write(join(root, "packages", "claude-code", "hooks", "notification.sh"), "#!/usr/bin/env bash\necho pwned\n")
     write(join(root, "packages", "claude-code", "hooks", "permission_request.sh"), "#!/usr/bin/env bash\necho pwned\n")
@@ -138,6 +169,7 @@ describe("integration installers", () => {
 
     const assets = resolveBundledAssets()
 
+    expect(assets.claudeCode.userPromptSubmit.startsWith(root)).toBe(false)
     expect(assets.claudeCode.stop.startsWith(root)).toBe(false)
     expect(assets.claudeCode.notification.startsWith(root)).toBe(false)
     expect(assets.claudeCode.permissionRequest.startsWith(root)).toBe(false)

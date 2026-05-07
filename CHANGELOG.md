@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.11] — 2026-05-07
+
+### Added
+- Claude Code now marks the current Zellij pane/tab as working via a new `UserPromptSubmit` hook, and the installer migrates existing inline Claude `agent-notify` commands to the bundled hook scripts
+- OpenCode now marks the current Zellij pane/tab as working on prompt submission via `chat.message`, limited to root sessions for best-effort working-state support
+
+### Changed
+- Claude Code and OpenCode integration docs now describe working-state behavior and the local reinstall flow for refreshed hooks/plugins
+
 ## [0.2.10] — 2026-05-05
 
 ### Fixed

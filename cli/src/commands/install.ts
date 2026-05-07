@@ -7,6 +7,7 @@ import { defaultConfigPath } from "@agent-notify/core"
 export type InstallTarget = "all" | "pi" | "opencode" | "claude-code"
 
 type ClaudeCodeAssets = {
+  userPromptSubmit: string
   stop: string
   notification: string
   permissionRequest: string
@@ -107,11 +108,13 @@ function readRequiredAssetText(path: string, label: string): string {
 }
 
 export function validateBundledAssets(assets: ResolvedAssets): void {
+  const userPromptSubmit = readRequiredAssetText(assets.claudeCode.userPromptSubmit, "Claude Code UserPromptSubmit hook")
   const stop = readRequiredAssetText(assets.claudeCode.stop, "Claude Code stop hook")
   const notification = readRequiredAssetText(assets.claudeCode.notification, "Claude Code notification hook")
   const permissionRequest = readRequiredAssetText(assets.claudeCode.permissionRequest, "Claude Code permission hook")
 
   for (const [label, source] of [
+    ["Claude Code UserPromptSubmit hook", userPromptSubmit],
     ["Claude Code stop hook", stop],
     ["Claude Code notification hook", notification],
     ["Claude Code permission hook", permissionRequest],
@@ -146,6 +149,11 @@ export function validateBundledAssets(assets: ResolvedAssets): void {
 export function resolveBundledAssets(): ResolvedAssets {
   const assets = {
     claudeCode: {
+      userPromptSubmit: resolveAsset([
+        "libexec/claude-code/hooks/user_prompt_submit.sh",
+        "claude-code/hooks/user_prompt_submit.sh",
+        "packages/claude-code/hooks/user_prompt_submit.sh",
+      ]),
       stop: resolveAsset([
         "libexec/claude-code/hooks/stop.sh",
         "claude-code/hooks/stop.sh",
@@ -242,14 +250,25 @@ function parseTarget(rawArgs: string[], fallback: InstallTarget = "all"): Instal
   throw new Error(`Unknown install target: ${target}`)
 }
 
-function isClaudeAgentNotifyCommand(command: unknown, scriptName: string): boolean {
+function escapeForRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+function containsAgentNotifySubcommand(command: string, subcommand: string): boolean {
+  return new RegExp(`\\bagent-notify\\b[^\\n]*\\b${escapeForRegExp(subcommand)}\\b`).test(command)
+}
+
+function isClaudeAgentNotifyCommand(command: unknown, scriptName: string, legacySubcommands: string[] = []): boolean {
   if (typeof command !== "string") return false
-  return command.includes("agent-notify") && (
+
+  const isBundledHookCommand = command.includes("agent-notify") && (
     command.endsWith(`/claude-code/hooks/${scriptName}`)
     || command.endsWith(`/hooks/${scriptName}`)
     || command.endsWith(`/hooks/agent-notify/${scriptName}`)
     || command.includes("agent-notify.sh")
   )
+
+  return isBundledHookCommand || legacySubcommands.some((subcommand) => containsAgentNotifySubcommand(command, subcommand))
 }
 
 function claudeHooksDir(homeDir: string): string {
@@ -262,10 +281,12 @@ function legacyClaudeHooksRoot(homeDir: string): string {
 
 function installClaudeCode(env: InstallEnvironment): string[] {
   const hooksDir = claudeHooksDir(env.homeDir)
+  const userPromptSubmitTarget = join(hooksDir, "user_prompt_submit.sh")
   const stopTarget = join(hooksDir, "stop.sh")
   const notificationTarget = join(hooksDir, "notification.sh")
   const permissionTarget = join(hooksDir, "permission_request.sh")
 
+  copyFile(env.assets.claudeCode.userPromptSubmit, userPromptSubmitTarget, 0o755)
   copyFile(env.assets.claudeCode.stop, stopTarget, 0o755)
   copyFile(env.assets.claudeCode.notification, notificationTarget, 0o755)
   copyFile(env.assets.claudeCode.permissionRequest, permissionTarget, 0o755)
@@ -275,13 +296,14 @@ function installClaudeCode(env: InstallEnvironment): string[] {
   const hooks = (settings.hooks && typeof settings.hooks === "object") ? settings.hooks as Record<string, unknown> : {}
   settings.hooks = hooks
 
-  const targets: Array<[string, string, string | undefined]> = [
-    ["Stop", stopTarget, ""],
-    ["Notification", notificationTarget, ""],
-    ["PermissionRequest", permissionTarget, "*"],
+  const targets: Array<{ eventName: string; command: string; matcher?: string; legacySubcommands: string[] }> = [
+    { eventName: "UserPromptSubmit", command: userPromptSubmitTarget, legacySubcommands: ["working-start"] },
+    { eventName: "Stop", command: stopTarget, matcher: "", legacySubcommands: ["done"] },
+    { eventName: "Notification", command: notificationTarget, matcher: "", legacySubcommands: ["question"] },
+    { eventName: "PermissionRequest", command: permissionTarget, matcher: "*", legacySubcommands: ["permission", "question"] },
   ]
 
-  for (const [eventName, command, matcher] of targets) {
+  for (const { eventName, command, matcher, legacySubcommands } of targets) {
     const scriptName = command.split("/").at(-1) ?? ""
     const current = Array.isArray(hooks[eventName]) ? hooks[eventName] as ClaudeCodeHookMatcher[] : []
 
@@ -293,13 +315,13 @@ function installClaudeCode(env: InstallEnvironment): string[] {
     let replaced = false
     const next = current.map((entry) => {
       const nested = Array.isArray(entry.hooks) ? entry.hooks : []
-      const hasLegacy = nested.some((hook) => isClaudeAgentNotifyCommand(hook.command, scriptName))
+      const hasLegacy = nested.some((hook) => isClaudeAgentNotifyCommand(hook.command, scriptName, legacySubcommands))
       if (!hasLegacy) return entry
       replaced = true
       return {
         ...entry,
         hooks: nested.map((hook) => (
-          isClaudeAgentNotifyCommand(hook.command, scriptName)
+          isClaudeAgentNotifyCommand(hook.command, scriptName, legacySubcommands)
             ? { ...hook, type: "command", command }
             : hook
         )),
@@ -346,6 +368,7 @@ function uninstallClaudeCode(homeDir: string): string[] {
     const hooks = (settings.hooks && typeof settings.hooks === "object") ? settings.hooks as Record<string, unknown> : {}
 
     const targets: Array<[string, string]> = [
+      ["UserPromptSubmit", "user_prompt_submit.sh"],
       ["Stop", "stop.sh"],
       ["Notification", "notification.sh"],
       ["PermissionRequest", "permission_request.sh"],

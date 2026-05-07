@@ -138,9 +138,12 @@ Hooks are configured in `~/.claude/settings.json`, and the hook scripts are copi
 
 | Hook | Event |
 |------|-------|
+| `UserPromptSubmit` | Agent started working — marks the current Zellij pane/tab as **working** |
 | `Stop` | Agent finished — sends **done** notification |
 | `Notification` | Agent waiting for input — sends **question** notification |
 | `PermissionRequest` | Agent needs permission — sends **permission** notification |
+
+The working-state hook is a best-effort no-op outside Zellij. It only drives the live tab/pane indicator and does not show a desktop notification by itself.
 
 ## OpenCode
 
@@ -150,10 +153,11 @@ Install with:
 agent-notify install opencode
 ```
 
-This copies the plugin into `~/.config/opencode/plugins/opencode-agent-notify/` and updates `~/.config/opencode/opencode.json`. It listens to `session.idle`, `session.error`, and `permission.asked` events.
+This copies the plugin into `~/.config/opencode/plugins/opencode-agent-notify/` and updates `~/.config/opencode/opencode.json`. It listens to `chat.message`, `session.idle`, `session.error`, and `permission.asked` hooks/events.
 
 It emits:
 
+- **working** indicator updates on `chat.message` (best-effort prompt-submit timing; Zellij only, no desktop notification)
 - **done** for `session.idle` and `session.error`
 - **permission** for `permission.asked`
 
@@ -272,6 +276,8 @@ bun run test
 ```
 
 `package.json` at the workspace root is now the canonical version source. Run `bun run sync:version` after changing it to update the workspace package versions and generated CLI version constant.
+
+For Claude Code specifically, rerun `agent-notify install claude-code` after editing files under `packages/claude-code/hooks/`, then start a fresh Claude Code session so the updated hooks and settings are picked up.
 
 For OpenCode specifically, rerun `./install.sh` after building so `~/.config/opencode/opencode.json` points at local plugin path, then start fresh OpenCode session and trigger `session.idle` or `permission.asked`.
 

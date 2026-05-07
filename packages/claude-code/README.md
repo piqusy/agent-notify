@@ -12,13 +12,23 @@ agent-notify install claude-code
 
 This installs the hook scripts into `~/.claude/hooks/agent-notify/` and updates `~/.claude/settings.json`.
 
-The `PermissionRequest` hook sends a distinct `permission` notification, so you can configure its sound and enablement separately from normal `question` notifications.
+The `UserPromptSubmit` hook marks the current Zellij pane/tab as working while Claude Code is busy. The `PermissionRequest` hook sends a distinct `permission` notification, so you can configure its sound and enablement separately from normal `question` notifications.
 
 Manual wiring is also possible. Add these hooks to your Claude Code settings (`.claude/settings.json`):
 
 ```json
 {
   "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/path/to/agent-notify/packages/claude-code/hooks/user_prompt_submit.sh"
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "matcher": "",
@@ -43,7 +53,7 @@ Manual wiring is also possible. Add these hooks to your Claude Code settings (`.
     ],
     "PermissionRequest": [
       {
-        "matcher": "",
+        "matcher": "*",
         "hooks": [
           {
             "type": "command",
