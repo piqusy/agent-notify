@@ -312,28 +312,10 @@ jobs:
 
       - name: Build release body
         run: |
-          cat > release-body.md <<'EOF'
-          ## Install via Homebrew (macOS)
-
-          Homebrew publishing runs in a separate workflow after this GitHub Release is created.
-
-          \`\`\`sh
-          brew tap piqusy/tap
-          brew install agent-notify
-          \`\`\`
-
-          For exact historical versions, use the standalone assets attached to this release.
-
-          ## Standalone binaries
-
-          Download the asset matching your OS/CPU from this release:
-
-          - macOS: `agent-notify-darwin-arm64.tar.gz`, `agent-notify-darwin-x64.tar.gz`
-          - Linux: `agent-notify-linux-arm64.tar.gz`, `agent-notify-linux-x64.tar.gz`
-          - Windows: `agent-notify-windows-x64.zip`
-
-          Release archives and checksums are attached below.
-          EOF
+          .github/scripts/build-release-body.sh \
+            "${RELEASE_TAG#v}" \
+            release-body.md \
+            release-changelog.md
 
       - name: Create or update GitHub Release
         uses: softprops/action-gh-release@v2
