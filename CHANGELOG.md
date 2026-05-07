@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.12] — 2026-05-07
+
+### Added
+- New `Release Dry Run` GitHub Actions workflow previews the combined custom release body and auto-generated GitHub release notes before publishing
+
+### Changed
+- GitHub Releases are now published with `softprops/action-gh-release`, combining the custom install/binaries intro with GitHub-generated release notes
+- The release workflow now preserves Markdown and backticks correctly when building the custom release body
+
 ## [0.2.11] — 2026-05-07
 
 ### Added
