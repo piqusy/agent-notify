@@ -312,7 +312,7 @@ jobs:
 
       - name: Build release body
         run: |
-          cat > release-body.md <<EOF
+          cat > release-body.md <<'EOF'
           ## Install via Homebrew (macOS)
 
           Homebrew publishing runs in a separate workflow after this GitHub Release is created.
