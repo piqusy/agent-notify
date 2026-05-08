@@ -65,6 +65,34 @@ describe("OpenCode plugin", () => {
     expect(markPaneWorkingMock).not.toHaveBeenCalled()
   })
 
+  it("sends done notifications on session.responseReady for root sessions", async () => {
+    const plugin = await OpenCodeAgentNotify()
+    await plugin.event({
+      event: {
+        type: "session.responseReady",
+        session: { id: "session-1", cwd: "/tmp/project" },
+      },
+    })
+
+    expect(notifyMock).toHaveBeenCalledWith({
+      state: "done",
+      tool: "opencode",
+      cwd: "/tmp/project",
+    })
+  })
+
+  it("ignores session.idle so working state is not cleared prematurely", async () => {
+    const plugin = await OpenCodeAgentNotify()
+    await plugin.event({
+      event: {
+        type: "session.idle",
+        session: { id: "session-1", cwd: "/tmp/project" },
+      },
+    })
+
+    expect(notifyMock).not.toHaveBeenCalled()
+  })
+
   it("sends permission notifications for root sessions", async () => {
     const plugin = await OpenCodeAgentNotify()
     await plugin.event({

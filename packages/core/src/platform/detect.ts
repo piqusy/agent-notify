@@ -1,6 +1,6 @@
 import { execSync } from "child_process";
-import { existsSync, readFileSync } from "fs";
-import { dirname, join, resolve } from "path";
+import { existsSync, readFileSync, realpathSync } from "fs";
+import { delimiter, dirname, join, resolve } from "path";
 import { fileURLToPath } from "url";
 import type { NotifyBackend } from "../types.js";
 
@@ -25,10 +25,47 @@ function ancestorDirs(start: string): string[] {
   return dirs;
 }
 
+function resolveExecutableOnPath(names: string[]): string | null {
+  const pathValue = process.env.PATH ?? "";
+  if (!pathValue) return null;
+
+  for (const dir of pathValue.split(delimiter)) {
+    if (!dir) continue;
+
+    for (const name of names) {
+      const candidate = join(dir, name);
+      if (existsSync(candidate)) {
+        return candidate;
+      }
+    }
+  }
+
+  return null;
+}
+
+function agentNotifyCandidateRoots(): string[] {
+  const executable = resolveExecutableOnPath(process.platform === "win32"
+    ? ["agent-notify.exe", "agent-notify.cmd", "agent-notify.bat", "agent-notify"]
+    : ["agent-notify"]);
+  if (!executable) return [];
+
+  const roots = ancestorDirs(dirname(executable));
+
+  try {
+    const resolvedExecutable = realpathSync(executable);
+    roots.push(...ancestorDirs(dirname(resolvedExecutable)));
+  } catch {
+    // best effort only — fall back to the original executable path roots
+  }
+
+  return roots;
+}
+
 function trustedCandidateRoots(): string[] {
   return unique([
     ...ancestorDirs(MODULE_DIR),
     ...ancestorDirs(dirname(process.execPath)),
+    ...agentNotifyCandidateRoots(),
   ]);
 }
 

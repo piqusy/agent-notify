@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.2.13] — 2026-05-08
+
+### Added
+- New black-box CLI and installed-integration smoke coverage for Claude Code, OpenCode, and Pi, plus a gated live Zellij E2E suite for working/notified/restore flows
+- A dedicated non-blocking macOS `zellij-e2e` GitHub Actions job to exercise the gated live Zellij coverage in CI
+
+### Changed
+- OpenCode now treats `session.responseReady` as the completion signal instead of `session.idle`, so working-state indicators stay visible until the user-visible response is actually ready
+- macOS helper discovery now also resolves Homebrew-installed Agent Notify helpers via `agent-notify` on `PATH`, which keeps copied integrations like the installed OpenCode plugin on the native helper path
+
+### Fixed
+- OpenCode working-state indicators no longer clear prematurely when root sessions idle before the final response is ready
+- Installed OpenCode notifications on modern macOS no longer incorrectly warn that the native helper is missing when Agent Notify is installed via Homebrew
+
 ## [0.2.12] — 2026-05-07
 
 ### Added

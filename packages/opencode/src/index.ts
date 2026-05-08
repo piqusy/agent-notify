@@ -96,7 +96,10 @@ export const OpenCodeAgentNotify: OpenCodePlugin = async (input = {}) => {
   return {
     event: async ({ event }) => {
       try {
-        if (event.type === "session.idle" || event.type === "session.error") {
+        // OpenCode's session.idle fires too early for our use case: root sessions can idle
+        // while child sessions keep working, which clears the working indicator prematurely.
+        // session.responseReady tracks the user-visible end of the response more reliably.
+        if (event.type === "session.responseReady" || event.type === "session.error") {
           await handleSessionDone(event as EventPayload)
         }
 

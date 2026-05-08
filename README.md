@@ -153,12 +153,12 @@ Install with:
 agent-notify install opencode
 ```
 
-This copies the plugin into `~/.config/opencode/plugins/opencode-agent-notify/` and updates `~/.config/opencode/opencode.json`. It listens to `chat.message`, `session.idle`, `session.error`, and `permission.asked` hooks/events.
+This copies the plugin into `~/.config/opencode/plugins/opencode-agent-notify/` and updates `~/.config/opencode/opencode.json`. It listens to `chat.message`, `session.responseReady`, `session.error`, and `permission.asked` hooks/events.
 
 It emits:
 
 - **working** indicator updates on `chat.message` (best-effort prompt-submit timing; Zellij only, no desktop notification)
-- **done** for `session.idle` and `session.error`
+- **done** for `session.responseReady` and `session.error`
 - **permission** for `permission.asked`
 
 ## Pi
@@ -275,11 +275,19 @@ bun run build
 bun run test
 ```
 
+For the gated live Zellij coverage, run:
+
+```sh
+ZELLIJ_E2E=1 npx vitest run packages/core/src/__tests__/zellij.e2e.test.ts
+```
+
+This suite is intentionally skipped by default and also skipped automatically when `zellij` is unavailable.
+
 `package.json` at the workspace root is now the canonical version source. Run `bun run sync:version` after changing it to update the workspace package versions and generated CLI version constant.
 
 For Claude Code specifically, rerun `agent-notify install claude-code` after editing files under `packages/claude-code/hooks/`, then start a fresh Claude Code session so the updated hooks and settings are picked up.
 
-For OpenCode specifically, rerun `./install.sh` after building so `~/.config/opencode/opencode.json` points at local plugin path, then start fresh OpenCode session and trigger `session.idle` or `permission.asked`.
+For OpenCode specifically, rerun `./install.sh` after building so `~/.config/opencode/opencode.json` points at local plugin path, then start a fresh OpenCode session and trigger `session.responseReady` or `permission.asked`.
 
 For Pi specifically, rerun `./install.sh` after editing `packages/pi-coding-agent/src/agent-notify.ts` so the latest extension is copied into `~/.pi/agent/extensions/agent-notify.ts`.
 
