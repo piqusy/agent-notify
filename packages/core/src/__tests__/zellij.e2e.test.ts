@@ -156,16 +156,72 @@ function runZellijCommand(args: string[], env: NodeJS.ProcessEnv, options: { cwd
   })
 }
 
+function stripAnsi(value: string): string {
+  return value.replace(/\u001B\[[0-9;?]*[ -/]*[@-~]/g, "")
+}
+
+function parseJsonOutput<T>(stdout: string, label: string): T {
+  const sanitized = stripAnsi(stdout).trim()
+  const arrayStart = sanitized.indexOf("[")
+  const objectStart = sanitized.indexOf("{")
+  const starts = [arrayStart, objectStart].filter((index) => index >= 0)
+  if (starts.length === 0) {
+    throw new Error(`Expected JSON output for ${label}, got: ${sanitized || "(empty)"}`)
+  }
+
+  const start = Math.min(...starts)
+  const trimmed = sanitized.slice(start)
+  const arrayEnd = trimmed.lastIndexOf("]")
+  const objectEnd = trimmed.lastIndexOf("}")
+  const end = Math.max(arrayEnd, objectEnd)
+  const payload = end >= 0 ? trimmed.slice(0, end + 1) : trimmed
+  return JSON.parse(payload) as T
+}
+
+function parseNumericOutput(stdout: string, label: string): number {
+  const match = stripAnsi(stdout).match(/(\d+)/)
+  if (!match) {
+    throw new Error(`Expected numeric output for ${label}, got: ${stdout || "(empty)"}`)
+  }
+
+  return Number.parseInt(match[1], 10)
+}
+
+function sessionExists(sessionName: string, env: NodeJS.ProcessEnv): boolean {
+  const result = runZellijCommand(["list-sessions"], env)
+  if (result.error || result.status !== 0) return false
+  return stripAnsi(result.stdout).includes(sessionName)
+}
+
 function readTabs(sessionName: string, env: NodeJS.ProcessEnv): TabInfo[] {
   const result = runZellijCommand(["--session", sessionName, "action", "list-tabs", "--json"], env)
   assertCommandSucceeded(result, `zellij list-tabs (${sessionName})`)
-  return JSON.parse(result.stdout) as TabInfo[]
+  return parseJsonOutput<TabInfo[]>(result.stdout, `zellij list-tabs (${sessionName})`)
 }
 
 function readPanes(sessionName: string, env: NodeJS.ProcessEnv): PaneInfo[] {
   const result = runZellijCommand(["--session", sessionName, "action", "list-panes", "--json", "--tab"], env)
   assertCommandSucceeded(result, `zellij list-panes (${sessionName})`)
-  return JSON.parse(result.stdout) as PaneInfo[]
+  return parseJsonOutput<PaneInfo[]>(result.stdout, `zellij list-panes (${sessionName})`)
+}
+
+function createDedicatedTab(sessionName: string, name: string, cwd: string, env: NodeJS.ProcessEnv): number {
+  const result = runZellijCommand([
+    "--session",
+    sessionName,
+    "action",
+    "new-tab",
+    "--name",
+    name,
+    "--cwd",
+    cwd,
+    "--",
+    "/bin/sh",
+    "-lc",
+    "sleep 300",
+  ], env)
+  assertCommandSucceeded(result, `zellij new-tab (${sessionName}, ${name})`)
+  return parseNumericOutput(result.stdout, `zellij new-tab (${sessionName}, ${name})`)
 }
 
 function renameTab(sessionName: string, tabId: number, name: string, env: NodeJS.ProcessEnv): void {
@@ -242,13 +298,13 @@ function removeDirWithRetries(path: string): void {
   rmSync(path, { recursive: true, force: true })
 }
 
-function createLiveZellijHarness(): LiveZellijHarness {
+async function createLiveZellijHarness(): Promise<LiveZellijHarness> {
   const rootDir = mkdtempSync(join(tmpdir(), "agent-notify-zellij-e2e-"))
   const homeDir = join(rootDir, "home")
   const tempDir = join(rootDir, "tmp")
   const binDir = join(rootDir, "bin")
   const workDir = join(homeDir, "workspace")
-  const sessionName = `a${Math.random().toString(36).slice(2, 5)}`
+  const sessionName = `a${Math.random().toString(36).slice(2, 4)}${Date.now().toString(36).slice(-4)}`
   const baseTabName = `e2e-${sessionName}`
   const terminalAppName = `AgentNotifyZellijE2E-${sessionName}`
   const backendLogPath = join(rootDir, "backend.jsonl")
@@ -269,20 +325,32 @@ function createLiveZellijHarness(): LiveZellijHarness {
     USERPROFILE: homeDir,
     PATH: [binDir, process.env.PATH ?? ""].filter(Boolean).join(":"),
     AGENT_NOTIFY_BACKEND_LOG: backendLogPath,
+    NO_COLOR: "1",
+    CLICOLOR: "0",
   }
 
   startSession(sessionName, workDir, env)
 
-  const panes = readPanes(sessionName, env)
-  const livePane = panes.find((pane) => pane.is_plugin === false)
+  await waitFor(
+    `zellij session ${sessionName} to exist`,
+    () => sessionExists(sessionName, env),
+    (exists) => exists,
+  )
+
+  const tabId = createDedicatedTab(sessionName, baseTabName, workDir, env)
+  const livePane = await waitFor(
+    `live pane in zellij session ${sessionName} tab ${tabId}`,
+    () => readPanes(sessionName, env).find((pane) => pane.is_plugin === false && pane.tab_id === tabId) ?? null,
+    (pane): pane is PaneInfo => pane !== null,
+  )
   if (!livePane) {
-    throw new Error(`Could not find a live pane in session ${sessionName}`)
+    throw new Error(`Could not find a live pane in session ${sessionName} tab ${tabId}`)
   }
 
-  renameTab(sessionName, livePane.tab_id, baseTabName, env)
+  renameTab(sessionName, tabId, baseTabName, env)
   const tabs = readTabs(sessionName, env)
-  if (!tabs.some((tab) => tab.tab_id === livePane.tab_id && tab.name === baseTabName)) {
-    throw new Error(`Could not rename tab ${livePane.tab_id} to ${baseTabName}`)
+  if (!tabs.some((tab) => tab.tab_id === tabId && tab.name === baseTabName)) {
+    throw new Error(`Could not rename tab ${tabId} to ${baseTabName}`)
   }
 
   const stateRoot = join(tmpdir(), `agent-notify-zellij-state-${sessionName}`)
@@ -298,7 +366,7 @@ function createLiveZellijHarness(): LiveZellijHarness {
     binDir,
     workDir,
     sessionName,
-    tabId: livePane.tab_id,
+    tabId,
     paneId: livePane.id,
     baseTabName,
     stateRoot,
@@ -311,7 +379,7 @@ function createLiveZellijHarness(): LiveZellijHarness {
         binDir,
         workDir,
         sessionName,
-        tabId: livePane.tab_id,
+        tabId,
         paneId: livePane.id,
         baseTabName,
         stateRoot,
@@ -329,7 +397,7 @@ describeZellijE2E("live zellij E2E", () => {
   const harnesses: LiveZellijHarness[] = []
 
   async function createHarness(): Promise<LiveZellijHarness> {
-    const harness = createLiveZellijHarness()
+    const harness = await createLiveZellijHarness()
     harnesses.push(harness)
     return harness
   }
@@ -365,7 +433,7 @@ describeZellijE2E("live zellij E2E", () => {
       indicatorTabName: harness.baseTabName,
       restoreTabName: harness.baseTabName,
     }))
-  })
+  }, 30_000)
 
   it("marks the live tab as notified and clears the working state on done", async () => {
     const harness = await createHarness()
@@ -399,7 +467,7 @@ describeZellijE2E("live zellij E2E", () => {
       indicatorTabName: harness.baseTabName,
       restoreTabName: harness.baseTabName,
     }))
-  })
+  }, 30_000)
 
   it("restores the live tab name and removes pending state on working-stop", async () => {
     const harness = await createHarness()
@@ -427,5 +495,5 @@ describeZellijE2E("live zellij E2E", () => {
 
     expect(restoredName).toBe(harness.baseTabName)
     expect(existsSync(pendingPanePath(harness))).toBe(false)
-  })
+  }, 30_000)
 })
