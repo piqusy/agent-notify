@@ -1,6 +1,6 @@
 {
   "name": "agent-notify-cli",
-  "version": "0.2.13",
+  "version": "0.2.14",
   "description": "CLI for agent-notify notifications",
   "type": "module",
   "bin": {

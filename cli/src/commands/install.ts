@@ -128,6 +128,9 @@ export function validateBundledAssets(assets: ResolvedAssets): void {
   if (!opencodeIndex.includes("OpenCodeAgentNotify") && !opencodeIndex.includes("export const plugin")) {
     throw new Error("OpenCode plugin entry did not match the expected bundled shape")
   }
+  if (!opencodeIndex.includes("chat.message")) {
+    throw new Error("OpenCode plugin entry is missing the chat.message hook required for working tab indicators")
+  }
 
   if (assets.opencode.indexDts) {
     readRequiredAssetText(assets.opencode.indexDts, "OpenCode plugin types")
@@ -415,9 +418,13 @@ function installOpenCode(env: InstallEnvironment): string[] {
   const pluginPath = join(pluginDir, "index.js")
   const configPath = join(env.homeDir, ".config", "opencode", "opencode.json")
 
+  // Keep the installed local plugin package.json-free. OpenCode resolves local
+  // file plugins through package metadata when present, which would redirect
+  // this root entry path to dist/ based on our published package.json.
   copyFile(env.assets.opencode.indexJs, pluginPath)
-  if (env.assets.opencode.indexDts) copyFile(env.assets.opencode.indexDts, join(pluginDir, "index.d.ts"))
-  if (env.assets.opencode.packageJson) copyFile(env.assets.opencode.packageJson, join(pluginDir, "package.json"))
+  if (env.assets.opencode.indexDts) {
+    copyFile(env.assets.opencode.indexDts, join(pluginDir, "index.d.ts"))
+  }
 
   const config = readJson(configPath)
   const plugin = Array.isArray(config.plugin) ? config.plugin.filter((entry) => !isLegacyOpenCodePlugin(entry) || entry === pluginPath) : []

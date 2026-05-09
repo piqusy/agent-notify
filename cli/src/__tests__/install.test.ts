@@ -59,6 +59,9 @@ describe("integration installers", () => {
     expect(existsSync(join(root, ".claude", "hooks", "agent-notify", "user_prompt_submit.sh"))).toBe(true)
     expect(existsSync(join(root, ".claude", "hooks", "agent-notify", "stop.sh"))).toBe(true)
     expect(existsSync(join(root, ".config", "opencode", "plugins", "opencode-agent-notify", "index.js"))).toBe(true)
+    expect(existsSync(join(root, ".config", "opencode", "plugins", "opencode-agent-notify", "package.json"))).toBe(false)
+    expect(existsSync(join(root, ".config", "opencode", "plugins", "opencode-agent-notify", "dist", "index.js"))).toBe(false)
+    expect(existsSync(join(root, ".config", "opencode", "plugins", "opencode-agent-notify", "dist", "index.d.ts"))).toBe(false)
     expect(existsSync(join(root, ".pi", "agent", "extensions", "agent-notify.ts"))).toBe(true)
 
     const claudeSettings = JSON.parse(readFileSync(join(root, ".claude", "settings.json"), "utf8")) as {
@@ -177,6 +180,38 @@ describe("integration installers", () => {
     expect(assets.opencode.indexDts?.startsWith(root)).toBe(false)
     expect(assets.opencode.packageJson?.startsWith(root)).toBe(false)
     expect(assets.pi.extension.startsWith(root)).toBe(false)
+  })
+
+  it("installs OpenCode plugin files in the root layout only", () => {
+    const root = makeTempDir()
+    dirs.push(root)
+    const assets = createAssets(root)
+    const configPath = join(root, ".config", "agent-notify", "config.json")
+
+    installTargets("opencode", { homeDir: root, assets, configPath })
+
+    expect(existsSync(join(root, ".config", "opencode", "plugins", "opencode-agent-notify", "index.js"))).toBe(true)
+    expect(existsSync(join(root, ".config", "opencode", "plugins", "opencode-agent-notify", "index.d.ts"))).toBe(true)
+    expect(existsSync(join(root, ".config", "opencode", "plugins", "opencode-agent-notify", "package.json"))).toBe(false)
+    expect(existsSync(join(root, ".config", "opencode", "plugins", "opencode-agent-notify", "dist", "index.js"))).toBe(false)
+    expect(existsSync(join(root, ".config", "opencode", "plugins", "opencode-agent-notify", "dist", "index.d.ts"))).toBe(false)
+  })
+
+  it("rejects OpenCode bundled assets missing the working hook", () => {
+    const root = makeTempDir()
+    dirs.push(root)
+    const assets = createAssets(root)
+
+    write(assets.opencode.indexJs, [
+      "export const OpenCodeAgentNotify = async () => ({",
+      "  event: async () => {},",
+      "})",
+      "export const plugin = OpenCodeAgentNotify",
+      "export default OpenCodeAgentNotify",
+      "",
+    ].join("\n"))
+
+    expect(() => validateBundledAssets(assets)).toThrow(/chat\.message hook/)
   })
 
   it("rejects bundled assets that fail integrity checks", () => {

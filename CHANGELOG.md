@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.14] — 2026-05-09
+
+### Fixed
+- OpenCode local installs now keep the copied plugin root-entry-only instead of copying package metadata that redirects loading to missing `dist/` assets
+- The installer now rejects bundled OpenCode plugins that omit the `chat.message` hook required for working tab indicators
+
 ## [0.2.13] — 2026-05-08
 
 ### Added
