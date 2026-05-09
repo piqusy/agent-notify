@@ -142,6 +142,16 @@ function assertCommandSucceeded(result: SpawnSyncReturns<string>, label: string)
   ].filter(Boolean).join("\n\n"))
 }
 
+function formatCommandResult(prefix: string, result: SpawnSyncReturns<string> | null): string[] {
+  if (!result) return []
+
+  return [
+    `${prefix} status=${result.status ?? "null"}`,
+    result.stdout ? `${prefix} stdout:\n${result.stdout}` : "",
+    result.stderr ? `${prefix} stderr:\n${result.stderr}` : "",
+  ].filter(Boolean)
+}
+
 function shellEscape(value: string): string {
   return `'${value.replace(/'/g, `'"'"'`)}'`
 }
@@ -187,12 +197,6 @@ function parseNumericOutput(stdout: string, label: string): number {
   return Number.parseInt(match[1], 10)
 }
 
-function sessionExists(sessionName: string, env: NodeJS.ProcessEnv): boolean {
-  const result = runZellijCommand(["list-sessions"], env)
-  if (result.error || result.status !== 0) return false
-  return stripAnsi(result.stdout).includes(sessionName)
-}
-
 function readTabs(sessionName: string, env: NodeJS.ProcessEnv): TabInfo[] {
   const result = runZellijCommand(["--session", sessionName, "action", "list-tabs", "--json"], env)
   assertCommandSucceeded(result, `zellij list-tabs (${sessionName})`)
@@ -205,22 +209,26 @@ function readPanes(sessionName: string, env: NodeJS.ProcessEnv): PaneInfo[] {
   return parseJsonOutput<PaneInfo[]>(result.stdout, `zellij list-panes (${sessionName})`)
 }
 
-function createDedicatedTab(sessionName: string, name: string, cwd: string, env: NodeJS.ProcessEnv): number {
-  const result = runZellijCommand([
-    "--session",
-    sessionName,
-    "action",
-    "new-tab",
-    "--name",
-    name,
-    "--cwd",
-    cwd,
-    "--",
-    "/bin/sh",
-    "-lc",
-    "sleep 300",
-  ], env)
-  assertCommandSucceeded(result, `zellij new-tab (${sessionName}, ${name})`)
+async function createDedicatedTab(sessionName: string, name: string, cwd: string, env: NodeJS.ProcessEnv): Promise<number> {
+  const result = await waitForCommandSuccess(
+    `zellij new-tab (${sessionName}, ${name})`,
+    () => runZellijCommand([
+      "--session",
+      sessionName,
+      "action",
+      "new-tab",
+      "--name",
+      name,
+      "--cwd",
+      cwd,
+      "--",
+      "/bin/sh",
+      "-lc",
+      "sleep 300",
+    ], env),
+    10_000,
+  )
+
   return parseNumericOutput(result.stdout, `zellij new-tab (${sessionName}, ${name})`)
 }
 
@@ -239,6 +247,19 @@ async function waitFor<T>(description: string, readValue: () => T, isReady: (val
   }
 
   throw new Error(`Timed out waiting for ${description}`)
+}
+
+async function waitForCommandSuccess(
+  description: string,
+  runCommand: () => SpawnSyncReturns<string>,
+  timeoutMs = 10_000,
+): Promise<SpawnSyncReturns<string>> {
+  return waitFor(
+    description,
+    runCommand,
+    (result) => !result.error && result.status === 0,
+    timeoutMs,
+  )
 }
 
 function pendingPanePath(harness: LiveZellijHarness): string {
@@ -260,15 +281,53 @@ function runCli(harness: LiveZellijHarness, args: string[]): void {
   assertCommandSucceeded(result, `agent-notify ${args.join(" ")}`)
 }
 
-function startSession(sessionName: string, cwd: string, env: NodeJS.ProcessEnv): void {
-  // Starting Zellij without a TTY creates the session and then exits/panics when it
-  // cannot enter raw mode. Wrapping the command in bash preserves the same behavior
-  // under Node's non-interactive child-process environment.
-  runZellijCommand(["-s", sessionName], env, {
-    cwd,
-    stdio: "ignore",
-    timeout: 5_000,
-  })
+async function startSession(sessionName: string, cwd: string, env: NodeJS.ProcessEnv): Promise<void> {
+  let lastStartResult: SpawnSyncReturns<string> | null = null
+  let lastListSessionsResult: SpawnSyncReturns<string> | null = null
+  let lastListTabsResult: SpawnSyncReturns<string> | null = null
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    // Starting Zellij without a TTY creates the session and then exits/panics when it
+    // cannot enter raw mode. Wrapping the command in bash preserves the same behavior
+    // under Node's non-interactive child-process environment.
+    lastStartResult = runZellijCommand(["-s", sessionName], env, {
+      cwd,
+      stdio: "pipe",
+      timeout: 5_000,
+    })
+
+    try {
+      await waitFor(
+        `zellij session ${sessionName} to exist`,
+        () => {
+          lastListSessionsResult = runZellijCommand(["list-sessions"], env, { timeout: 5_000 })
+          return lastListSessionsResult
+        },
+        (result) => !result.error && result.status === 0 && stripAnsi(result.stdout).includes(sessionName),
+        5_000,
+      )
+
+      await waitForCommandSuccess(
+        `zellij session ${sessionName} to accept actions`,
+        () => {
+          lastListTabsResult = runZellijCommand(["--session", sessionName, "action", "list-tabs", "--json"], env, { timeout: 5_000 })
+          return lastListTabsResult
+        },
+        5_000,
+      )
+
+      return
+    } catch {
+      runZellijCommand(["kill-session", sessionName], env, { stdio: "ignore", timeout: 5_000 })
+    }
+  }
+
+  throw new Error([
+    `Could not start zellij session ${sessionName}`,
+    ...formatCommandResult("last start", lastStartResult),
+    ...formatCommandResult("last list-sessions", lastListSessionsResult),
+    ...formatCommandResult("last list-tabs", lastListTabsResult),
+  ].filter(Boolean).join("\n\n"))
 }
 
 function stopSessionPoller(harness: LiveZellijHarness): void {
@@ -304,11 +363,12 @@ async function createLiveZellijHarness(): Promise<LiveZellijHarness> {
   const tempDir = join(rootDir, "tmp")
   const binDir = join(rootDir, "bin")
   const workDir = join(homeDir, "workspace")
-  const sessionName = `a${Math.random().toString(36).slice(2, 4)}${Date.now().toString(36).slice(-4)}`
+  const sessionName = `a${Math.random().toString(36).slice(2, 8)}${Date.now().toString(36).slice(-4)}`
   const baseTabName = `e2e-${sessionName}`
   const terminalAppName = `AgentNotifyZellijE2E-${sessionName}`
   const backendLogPath = join(rootDir, "backend.jsonl")
   const commandName = backendCommandForPlatform()
+  const stateRoot = join(tmpdir(), `agent-notify-zellij-state-${sessionName}`)
 
   mkdirSync(homeDir, { recursive: true })
   mkdirSync(tempDir, { recursive: true })
@@ -329,67 +389,66 @@ async function createLiveZellijHarness(): Promise<LiveZellijHarness> {
     CLICOLOR: "0",
   }
 
-  startSession(sessionName, workDir, env)
+  try {
+    await startSession(sessionName, workDir, env)
 
-  await waitFor(
-    `zellij session ${sessionName} to exist`,
-    () => sessionExists(sessionName, env),
-    (exists) => exists,
-  )
+    const tabId = await createDedicatedTab(sessionName, baseTabName, workDir, env)
+    const livePane = await waitFor(
+      `live pane in zellij session ${sessionName} tab ${tabId}`,
+      () => readPanes(sessionName, env).find((pane) => pane.is_plugin === false && pane.tab_id === tabId) ?? null,
+      (pane): pane is PaneInfo => pane !== null,
+    )
+    if (!livePane) {
+      throw new Error(`Could not find a live pane in session ${sessionName} tab ${tabId}`)
+    }
 
-  const tabId = createDedicatedTab(sessionName, baseTabName, workDir, env)
-  const livePane = await waitFor(
-    `live pane in zellij session ${sessionName} tab ${tabId}`,
-    () => readPanes(sessionName, env).find((pane) => pane.is_plugin === false && pane.tab_id === tabId) ?? null,
-    (pane): pane is PaneInfo => pane !== null,
-  )
-  if (!livePane) {
-    throw new Error(`Could not find a live pane in session ${sessionName} tab ${tabId}`)
-  }
+    renameTab(sessionName, tabId, baseTabName, env)
+    const tabs = readTabs(sessionName, env)
+    if (!tabs.some((tab) => tab.tab_id === tabId && tab.name === baseTabName)) {
+      throw new Error(`Could not rename tab ${tabId} to ${baseTabName}`)
+    }
 
-  renameTab(sessionName, tabId, baseTabName, env)
-  const tabs = readTabs(sessionName, env)
-  if (!tabs.some((tab) => tab.tab_id === tabId && tab.name === baseTabName)) {
-    throw new Error(`Could not rename tab ${tabId} to ${baseTabName}`)
-  }
+    env.ZELLIJ = "1"
+    env.ZELLIJ_SESSION_NAME = sessionName
+    env.ZELLIJ_PANE_ID = String(livePane.id)
 
-  const stateRoot = join(tmpdir(), `agent-notify-zellij-state-${sessionName}`)
-
-  env.ZELLIJ = "1"
-  env.ZELLIJ_SESSION_NAME = sessionName
-  env.ZELLIJ_PANE_ID = String(livePane.id)
-
-  return {
-    rootDir,
-    homeDir,
-    tempDir,
-    binDir,
-    workDir,
-    sessionName,
-    tabId,
-    paneId: livePane.id,
-    baseTabName,
-    stateRoot,
-    env,
-    cleanup: () => {
-      stopSessionPoller({
-        rootDir,
-        homeDir,
-        tempDir,
-        binDir,
-        workDir,
-        sessionName,
-        tabId,
-        paneId: livePane.id,
-        baseTabName,
-        stateRoot,
-        env,
-        cleanup: () => undefined,
-      })
-      runZellijCommand(["kill-session", sessionName], env, { stdio: "ignore", timeout: 5_000 })
-      removeDirWithRetries(stateRoot)
-      removeDirWithRetries(rootDir)
-    },
+    return {
+      rootDir,
+      homeDir,
+      tempDir,
+      binDir,
+      workDir,
+      sessionName,
+      tabId,
+      paneId: livePane.id,
+      baseTabName,
+      stateRoot,
+      env,
+      cleanup: () => {
+        stopSessionPoller({
+          rootDir,
+          homeDir,
+          tempDir,
+          binDir,
+          workDir,
+          sessionName,
+          tabId,
+          paneId: livePane.id,
+          baseTabName,
+          stateRoot,
+          env,
+          cleanup: () => undefined,
+        })
+        runZellijCommand(["kill-session", sessionName], env, { stdio: "ignore", timeout: 5_000 })
+        removeDirWithRetries(stateRoot)
+        removeDirWithRetries(rootDir)
+      },
+    }
+  } catch (error) {
+    runZellijCommand(["kill-session", sessionName], env, { stdio: "ignore", timeout: 5_000 })
+    removeDirWithRetries(stateRoot)
+    removeDirWithRetries(rootDir)
+    throw error
   }
 }
 
