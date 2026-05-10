@@ -192,11 +192,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p ci-bin
-          cat > ci-bin/notify-send <<'EOF'
-          #!/usr/bin/env bash
-          printf '%s\n' "$*" > "$RUNNER_TEMP/notify-send-args.txt"
-          exit 0
-          EOF
+          printf '%s\n' \
+            '#!/usr/bin/env bash' \
+            "printf '%s\\n' \"\$*\" > \"\$RUNNER_TEMP/notify-send-args.txt\"" \
+            'exit 0' > ci-bin/notify-send
           chmod +x ci-bin/notify-send
           export PATH="$PWD/ci-bin:$PATH"
 
@@ -205,7 +204,7 @@ jobs:
           "$binary" --help > /dev/null
           "$binary" --version
           "$binary" status --tool smoke-test
-          "$binary" test done --force
+          "$binary" test 'done' --force
 
           test -f "$RUNNER_TEMP/notify-send-args.txt"
           grep -F -- "Test — Done" "$RUNNER_TEMP/notify-send-args.txt"
@@ -294,8 +293,31 @@ jobs:
         with:
           path: dist/
 
+      - name: Restore executable permissions before archiving
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          # actions/download-artifact strips execute bits, so restore the files
+          # that must stay runnable in the published archives.
+          for binary in dist/agent-notify-darwin-*/bin/agent-notify dist/agent-notify-linux-*/bin/agent-notify
+          do
+            chmod +x "$binary"
+          done
+
+          for helper in dist/agent-notify-darwin-*/agent-notify-helper/AgentNotify.app/Contents/MacOS/AgentNotify
+          do
+            chmod +x "$helper"
+          done
+
+          for hook in dist/agent-notify-*/claude-code/hooks/*.sh
+          do
+            chmod +x "$hook"
+          done
+
       - name: Create release archives
         run: |
+          set -euo pipefail
           cd dist
           tar -czf agent-notify-darwin-arm64.tar.gz agent-notify-darwin-arm64
           tar -czf agent-notify-darwin-x64.tar.gz agent-notify-darwin-x64
@@ -309,6 +331,35 @@ jobs:
             agent-notify-linux-x64.tar.gz \
             agent-notify-windows-x64.zip > checksums.txt
           cat checksums.txt
+
+      - name: Verify archive executable permissions
+        run: |
+          set -euo pipefail
+          tmpdir=$(mktemp -d)
+          trap 'rm -rf "$tmpdir"' EXIT
+
+          check_tar_archive() {
+            local archive="$1"
+            local package_dir="$2"
+            local extracted_root="$tmpdir/$package_dir"
+
+            mkdir -p "$extracted_root"
+            tar -xzf "dist/$archive" -C "$extracted_root"
+
+            test -x "$extracted_root/$package_dir/bin/agent-notify"
+
+            for hook in "$extracted_root/$package_dir"/claude-code/hooks/*.sh; do
+              test -x "$hook"
+            done
+          }
+
+          check_tar_archive agent-notify-darwin-arm64.tar.gz agent-notify-darwin-arm64
+          check_tar_archive agent-notify-darwin-x64.tar.gz agent-notify-darwin-x64
+          check_tar_archive agent-notify-linux-arm64.tar.gz agent-notify-linux-arm64
+          check_tar_archive agent-notify-linux-x64.tar.gz agent-notify-linux-x64
+
+          test -x "$tmpdir/agent-notify-darwin-arm64/agent-notify-darwin-arm64/agent-notify-helper/AgentNotify.app/Contents/MacOS/AgentNotify"
+          test -x "$tmpdir/agent-notify-darwin-x64/agent-notify-darwin-x64/agent-notify-helper/AgentNotify.app/Contents/MacOS/AgentNotify"
 
       - name: Build release body
         run: |
