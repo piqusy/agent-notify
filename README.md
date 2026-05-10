@@ -4,6 +4,14 @@ Desktop notifications for AI coding agents — get notified when [Claude Code](h
 
 `agent-notify` is **macOS-first**, with **basic notification support on Linux and Windows** plus downloadable standalone binaries for those platforms.
 
+## Planning docs
+
+Project planning now lives in the Obsidian Work vault:
+
+- task packages: `Work/dev-mission/agent-notify/tasks/<task-key>/`
+- repo task board: `Work/dev-mission/agent-notify/tasks/ideas.md`
+- canonical task notes: `spec.md`, `plan.md`, `tasks.md`, `ideas.md`, `review.md`
+
 ## Why
 
 AI agents can take minutes on complex tasks. Instead of watching the terminal, you get a desktop notification the moment your attention is needed — with a distinct sound per event type and smart suppression when you're already at the keyboard. On macOS, this uses a bundled native helper for the best experience.
