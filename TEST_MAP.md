@@ -2,12 +2,12 @@
 
 ## Snapshot
 
-- Default suite status: `129 passed / 129`, `3 skipped` (`ZELLIJ_E2E` gated)
-- Full suite with Zellij E2E enabled: `132 passed / 132`
-- Test files: `25`
+- Default suite status: `147 passed / 147`, `3 skipped` (`ZELLIJ_E2E` gated)
+- Full suite with Zellij E2E enabled: `150 passed / 150`
+- Test files: `27`
 - Mix, roughly:
-  - **13 unit / mocked boundary tests**
-  - **9 component-style tests**
+  - **14 unit / mocked boundary tests**
+  - **10 component-style tests**
   - **3 end-to-end / smoke test files**
 
 ## How to read the labels
@@ -23,6 +23,8 @@
 | `cli/src/__tests__/config.test.ts` | Unit | Command dispatch only; `cmdInit` mocked. |
 | `cli/src/__tests__/doctor.test.ts` | Unit | Output formatting + status reporting; core APIs mocked. |
 | `cli/src/__tests__/init.test.ts` | Component | Command wizard flow with real config file write, but prompts/core mocked. |
+| `cli/src/__tests__/play-sound.test.ts` | Unit | Verifies platform-specific sound-launch command selection/encoding and non-critical error swallowing with spies. |
+| `cli/src/__tests__/prompts.test.ts` | Component | Exercises the real custom prompt modules against fake TTY input/output streams, covering cancel handling, validation, vim-style navigation, preview callbacks, and disabled-choice behavior. |
 | `cli/src/__tests__/install.test.ts` | Component | Real temp dirs/files/config mutation; verifies installer wiring across integrations. |
 | `cli/src/__tests__/notify.test.ts` | Unit | CLI command routing; core APIs mocked. |
 | `cli/src/__tests__/status.test.ts` | Unit | CLI output formatting; `inspectStatus` mocked. |
@@ -54,6 +56,7 @@
   - Config merge/validation
   - Cooldown logic
   - Notification payload/layout generation
+  - CLI prompt helper behavior and sound-launch command construction
   - OpenCode / Pi / Claude integration mapping at the artifact level
   - Helper discovery logic, including Homebrew-installed helper lookup via `agent-notify` on PATH
 
@@ -83,10 +86,8 @@
    - installed artifacts are exercised directly
    - a full live host session with real model execution is still not in CI
 
-3. **Some modules still have no direct dedicated tests**
-   - `cli/src/prompts/*.ts`
-   - `cli/src/sounds/play.ts`
-   - platform-specific real behavior on Linux/Windows/macOS helper UI
+3. **Some platform boundaries are still indirect**
+   - platform-specific real notification behavior on Linux/Windows/macOS helper UI is still validated mostly by command launch intent, not rendered desktop UI
 
 ## Bottom line
 
