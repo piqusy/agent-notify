@@ -7,7 +7,7 @@ import type { Config } from "./types.js"
 const ZELLIJ_STATE_PREFIX = "agent-notify-zellij-state"
 const POLLER_PID_FILE = "poller.pid"
 const POLLER_VERSION_FILE = "poller.version"
-const CURRENT_POLLER_VERSION = "2"
+const CURRENT_POLLER_VERSION = "3"
 
 const TAB_NOTIFY_PREFIX = " ● "
 const TAB_WORKING_PREFIX = " ○ "
@@ -662,8 +662,12 @@ while :; do
       pane_name="$(basename "$pane_file")"
       pane_id="\${pane_name#pane-}"
       pane_id="\${pane_id%.json}"
-      pane_exists="$(printf '%s' "$panes_json" | jq -r --argjson paneId "$pane_id" 'any(.[]; .id == $paneId)' 2>/dev/null || echo false)"
-      if [ "$pane_exists" != "true" ]; then
+      pane_tab_id="$(printf '%s' "$panes_json" | jq -r --argjson paneId "$pane_id" '.[] | select(.id == $paneId) | .tab_id' 2>/dev/null | head -n 1 || true)"
+      if [ -z "$pane_tab_id" ] || [ "$pane_tab_id" != "$tab_id" ]; then
+        applied="$(jq -r '.paneIndicatorApplied // false' "$pane_file" 2>/dev/null || echo false)"
+        if [ "$applied" = "true" ]; then
+          run_zellij set-pane-color --pane-id "$pane_id" --reset >/dev/null 2>&1 || true
+        fi
         rm -f "$pane_file"
         continue
       fi

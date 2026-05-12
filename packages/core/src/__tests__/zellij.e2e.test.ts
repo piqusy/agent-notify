@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest"
 type TabInfo = {
   name: string
   tab_id: number
+  active?: boolean
 }
 
 type PaneInfo = {
@@ -237,6 +238,11 @@ function renameTab(sessionName: string, tabId: number, name: string, env: NodeJS
   assertCommandSucceeded(result, `zellij rename-tab (${sessionName}, ${tabId}, ${name})`)
 }
 
+function focusTab(sessionName: string, tabId: number, env: NodeJS.ProcessEnv): void {
+  const result = runZellijCommand(["--session", sessionName, "action", "go-to-tab-by-id", String(tabId)], env)
+  assertCommandSucceeded(result, `zellij go-to-tab-by-id (${sessionName}, ${tabId})`)
+}
+
 async function waitFor<T>(description: string, readValue: () => T, isReady: (value: T) => boolean, timeoutMs = 10_000): Promise<T> {
   const startedAt = Date.now()
 
@@ -262,14 +268,23 @@ async function waitForCommandSuccess(
   )
 }
 
+function pendingPanePathFor(stateRoot: string, tabId: number, paneId: number): string {
+  return join(stateRoot, `tab-${tabId}`, `pane-${paneId}.json`)
+}
+
 function pendingPanePath(harness: LiveZellijHarness): string {
-  return join(harness.stateRoot, `tab-${harness.tabId}`, `pane-${harness.paneId}.json`)
+  return pendingPanePathFor(harness.stateRoot, harness.tabId, harness.paneId)
 }
 
 function readPendingPaneState(harness: LiveZellijHarness): PendingPaneState | null {
   const path = pendingPanePath(harness)
   if (!existsSync(path)) return null
   return JSON.parse(readFileSync(path, "utf8")) as PendingPaneState
+}
+
+function writePendingPaneState(path: string, state: PendingPaneState): void {
+  mkdirSync(dirname(path), { recursive: true })
+  writeFileSync(path, `${JSON.stringify(state)}\n`, "utf8")
 }
 
 function runCli(harness: LiveZellijHarness, args: string[]): void {
@@ -554,5 +569,66 @@ describeZellijE2E("live zellij E2E", () => {
 
     expect(restoredName).toBe(harness.baseTabName)
     expect(existsSync(pendingPanePath(harness))).toBe(false)
+  }, 30_000)
+
+  it("drops stale pane state when that pane id now belongs to another tab", async () => {
+    const harness = await createHarness()
+    const otherTabName = `${harness.baseTabName}-other`
+    const otherTabId = await createDedicatedTab(harness.sessionName, otherTabName, harness.workDir, harness.env)
+    const otherPane = await waitFor(
+      `live pane in zellij session ${harness.sessionName} tab ${otherTabId}`,
+      () => readPanes(harness.sessionName, harness.env).find((pane) => pane.is_plugin === false && pane.tab_id === otherTabId) ?? null,
+      (pane): pane is PaneInfo => pane !== null,
+    )
+    if (!otherPane) {
+      throw new Error(`Could not find a live pane in session ${harness.sessionName} tab ${otherTabId}`)
+    }
+
+    focusTab(harness.sessionName, harness.tabId, harness.env)
+    await waitFor(
+      "original tab focused again",
+      () => readTabs(harness.sessionName, harness.env).find((entry) => entry.tab_id === harness.tabId)?.active ?? false,
+      (active) => active === true,
+    )
+
+    runCli(harness, ["working-start"])
+    await waitFor(
+      "working tab rename before injecting stale state",
+      () => readTabs(harness.sessionName, harness.env).find((entry) => entry.tab_id === harness.tabId)?.name ?? null,
+      (name): name is string => name === ` ○ ${harness.baseTabName}`,
+    )
+    await waitFor(
+      "poller state before injecting stale state",
+      () => readPendingPaneState(harness),
+      (entry): entry is PendingPaneState => entry !== null,
+    )
+
+    const stalePanePath = pendingPanePathFor(harness.stateRoot, harness.tabId, otherPane.id)
+    rmSync(pendingPanePath(harness), { force: true })
+    writePendingPaneState(stalePanePath, {
+      paneId: otherPane.id,
+      updatedAt: Math.floor(Date.now() / 1000),
+      attentionAt: Math.floor(Date.now() / 1000),
+      workingAt: null,
+      paneIndicatorApplied: true,
+      indicatorTabName: harness.baseTabName,
+      restoreTabName: harness.baseTabName,
+    })
+    renameTab(harness.sessionName, harness.tabId, harness.baseTabName, harness.env)
+
+    const restoredName = await waitFor(
+      "stale tab state cleanup without false rename",
+      () => readTabs(harness.sessionName, harness.env).find((entry) => entry.tab_id === harness.tabId)?.name ?? null,
+      (name): name is string => name === harness.baseTabName,
+    )
+
+    await waitFor(
+      "stale pane state removed",
+      () => existsSync(stalePanePath),
+      (staleStateExists) => staleStateExists === false,
+    )
+
+    expect(restoredName).toBe(harness.baseTabName)
+    expect(existsSync(stalePanePath)).toBe(false)
   }, 30_000)
 })
