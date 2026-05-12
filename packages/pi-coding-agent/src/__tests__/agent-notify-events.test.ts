@@ -12,8 +12,11 @@ vi.mock("node:child_process", () => ({
 import agentNotify from "../agent-notify.js"
 
 describe("Pi agent-notify lifecycle integration", () => {
+  const originalArgv = [...process.argv]
+
   afterEach(() => {
     spawnMock.mockClear()
+    process.argv = [...originalArgv]
   })
 
   it("marks working on agent_start", async () => {
@@ -25,7 +28,7 @@ describe("Pi agent-notify lifecycle integration", () => {
     }
 
     agentNotify(pi as never)
-    await handlers.agent_start?.({}, { cwd: "/tmp/project" })
+    await handlers.agent_start?.({}, { cwd: "/tmp/project", hasUI: true })
 
     expect(spawnMock).toHaveBeenCalledWith(
       "agent-notify",
@@ -45,7 +48,7 @@ describe("Pi agent-notify lifecycle integration", () => {
     agentNotify(pi as never)
     await handlers.agent_end?.({
       messages: [{ role: "assistant", content: [{ type: "text", text: "Done." }] }],
-    }, { cwd: "/tmp/project" })
+    }, { cwd: "/tmp/project", hasUI: true })
 
     expect(spawnMock).toHaveBeenCalledTimes(1)
     expect(spawnMock).toHaveBeenCalledWith(
@@ -66,7 +69,7 @@ describe("Pi agent-notify lifecycle integration", () => {
     agentNotify(pi as never)
     await handlers.agent_end?.({
       messages: [{ role: "assistant", content: [], stopReason: "aborted" }],
-    }, { cwd: "/tmp/project" })
+    }, { cwd: "/tmp/project", hasUI: true })
 
     expect(spawnMock).toHaveBeenCalledTimes(1)
     expect(spawnMock).toHaveBeenCalledWith(
@@ -74,5 +77,24 @@ describe("Pi agent-notify lifecycle integration", () => {
       ["working-stop"],
       expect.objectContaining({ stdio: "ignore" }),
     )
+  })
+
+  it("suppresses lifecycle notifications for json no-session child runs", async () => {
+    process.argv = ["node", "pi", "--mode", "json", "-p", "--no-session"]
+
+    const handlers: Record<string, Function> = {}
+    const pi = {
+      on: vi.fn((event: string, handler: Function) => {
+        handlers[event] = handler
+      }),
+    }
+
+    agentNotify(pi as never)
+    await handlers.agent_start?.({}, { cwd: "/tmp/project", hasUI: false })
+    await handlers.agent_end?.({
+      messages: [{ role: "assistant", content: [{ type: "text", text: "Done." }] }],
+    }, { cwd: "/tmp/project", hasUI: false })
+
+    expect(spawnMock).not.toHaveBeenCalled()
   })
 })

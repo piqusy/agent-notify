@@ -181,9 +181,10 @@ This copies `agent-notify.ts` into `~/.pi/agent/extensions/`, which Pi auto-disc
 
 It emits:
 
-- **done** when Pi finishes a turn
+- **done** when Pi finishes a top-level interactive/RPC turn
 - **question** when the last assistant line ends with `?`
 - nothing for aborted/error turns or assistant turns with no visible text, avoiding false-positive completion notifications
+- nothing for Pi child runs in `--mode json --no-session`, which suppresses subagent noise from separate helper processes
 
 Pi does not have a built-in permission-request event, so there is no Pi `permission` notification.
 

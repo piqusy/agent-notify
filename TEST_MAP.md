@@ -2,8 +2,8 @@
 
 ## Snapshot
 
-- Default suite status: `147 passed / 147`, `3 skipped` (`ZELLIJ_E2E` gated)
-- Full suite with Zellij E2E enabled: `150 passed / 150`
+- Default suite status: `148 passed / 148`, `3 skipped` (`ZELLIJ_E2E` gated)
+- Full suite with Zellij E2E enabled: `151 passed / 151`
 - Test files: `27`
 - Mix, roughly:
   - **14 unit / mocked boundary tests**
@@ -45,7 +45,7 @@
 | `packages/core/src/__tests__/zellij.test.ts` | Component | Uses fake zellij binary/session metadata + real temp cache files; still not a live zellij session. |
 | `packages/core/src/__tests__/zellij.e2e.test.ts` | E2E / smoke | Runs against a real live Zellij session, gated by `ZELLIJ_E2E=1`; verifies working, notified, and restore flows. |
 | `packages/opencode/src/__tests__/index.test.ts` | Unit | Plugin hook wiring + event mapping; core mocked. Confirms `session.responseReady` done behavior and ignores `session.idle`. |
-| `packages/pi-coding-agent/src/__tests__/agent-notify-events.test.ts` | Unit | Extension lifecycle wiring; `spawn` mocked. |
+| `packages/pi-coding-agent/src/__tests__/agent-notify-events.test.ts` | Unit | Extension lifecycle wiring; `spawn` mocked. Confirms interactive runs notify while `--mode json --no-session` child runs stay silent. |
 | `packages/pi-coding-agent/src/__tests__/agent-notify.test.ts` | Unit | Pure classification logic. |
 
 ## Confidence by layer

@@ -108,20 +108,48 @@ function markWorkingStop(): void {
   runAgentNotify(["working-stop"])
 }
 
+function hasArgFlag(flag: string): boolean {
+  return process.argv.includes(flag)
+}
+
+function getArgValue(flag: string): string | undefined {
+  const index = process.argv.indexOf(flag)
+  if (index === -1) return undefined
+  return process.argv[index + 1]
+}
+
+function shouldEmitForContext(ctx: { hasUI?: boolean } | undefined): boolean {
+  // Pi subagents commonly run as separate `pi --mode json -p --no-session` child
+  // processes. Those child runs do not represent user-visible top-level turns, so
+  // suppress both working-state updates and completion notifications there.
+  if (ctx?.hasUI === false && getArgValue("--mode") === "json" && hasArgFlag("--no-session")) {
+    return false
+  }
+
+  return true
+}
+
 export default function agentNotify(pi: ExtensionAPI) {
-  pi.on("agent_start", async () => {
+  pi.on("agent_start", async (_event, ctx) => {
+    if (!shouldEmitForContext(ctx)) return
     markWorkingStart()
   })
 
   pi.on("agent_end", async (event, ctx) => {
-    const state = classifyPiAgentState(event.messages)
+    const shouldEmit = shouldEmitForContext(ctx)
+    const state = shouldEmit ? classifyPiAgentState(event.messages) : null
 
     writeDebugLog({
       timestamp: Date.now(),
       cwd: ctx.cwd,
+      hasUI: ctx.hasUI,
+      shouldEmit,
       classifiedState: state,
+      argv: process.argv.slice(2),
       messages: event.messages,
     })
+
+    if (!shouldEmit) return
 
     // agent-notify done/question already clears working state before sending.
     // Avoid separate detached working-stop process here to reduce end-of-run lag

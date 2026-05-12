@@ -4,9 +4,10 @@ This integration adds desktop notifications to [pi-coding-agent](https://github.
 
 ## What it does
 
-- Sends **done** notifications when Pi finishes a turn.
+- Sends **done** notifications when Pi finishes a top-level interactive/RPC turn.
 - Sends **question** notifications when the last assistant line ends with a `?`.
 - Ignores aborted/error turns and assistant turns that never produced visible text, which avoids false-positive completion notifications.
+- Suppresses child `pi --mode json --no-session` runs, which avoids subagent completion noise from separate Pi helper processes.
 - Uses the `agent-notify` CLI, so all existing cooldown, quiet hours, sounds, and focus detection rules still apply.
 
 Pi does not have a built-in permission-request event, so this integration does not emit `permission` notifications.
