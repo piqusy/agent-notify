@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.15] — 2026-05-13
+
+### Fixed
+- Pi child and subagent runs no longer emit extra completion notifications from background helper sessions
+- Zellij pane background tint now clears stale state when a pane ID later belongs to a different tab, preventing stray tint on unrelated tabs
+
 ## [0.2.14] — 2026-05-09
 
 ### Fixed
