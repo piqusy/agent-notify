@@ -278,7 +278,7 @@ If `~/.config/agent-notify/config.json` contains invalid JSON or bad values, `ag
 ## Local testing
 
 ```sh
-bun install
+bun install --frozen-lockfile --ignore-scripts --minimum-release-age=259200
 bun run sync:version
 bun run build
 bun run test

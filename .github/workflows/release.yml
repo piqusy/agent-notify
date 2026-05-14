@@ -101,7 +101,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: release-src
-        run: bun install --frozen-lockfile
+        run: bun install --frozen-lockfile --ignore-scripts --minimum-release-age=259200
 
       - name: Check release files
         run: node scripts/check-release.mjs

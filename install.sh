@@ -45,7 +45,7 @@ fi
 
 header "Building agent-notify"
 cd "$REPO_DIR"
-bun install --frozen-lockfile 2>&1 | tail -3
+bun install --frozen-lockfile --ignore-scripts --minimum-release-age=259200 2>&1 | tail -3
 bun run build 2>&1 | grep -E "(Build success|Build failed|error)" || true
 ok "Build complete"
 

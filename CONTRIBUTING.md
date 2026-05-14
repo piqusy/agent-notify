@@ -2,7 +2,7 @@
 
 ## Local Work
 
-- Use `bun install` to install dependencies.
+- Use `bun install --frozen-lockfile --ignore-scripts --minimum-release-age=259200` to install dependencies.
 - Run `bun run build` and `bun run test` before opening a PR.
 - Keep changes small and focused.
 
