@@ -2,6 +2,8 @@ import { spawn } from "node:child_process"
 import { writeFileSync } from "node:fs"
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent"
 
+const ASK_USER_QUESTION_TOOL_NAME = "ask_user_question"
+
 type TextBlock = {
   type?: string
   text?: string
@@ -129,13 +131,50 @@ function shouldEmitForContext(ctx: { hasUI?: boolean } | undefined): boolean {
   return true
 }
 
+function shouldEmitStructuredQuestionForContext(ctx: { hasUI?: boolean } | undefined): boolean {
+  if (!shouldEmitForContext(ctx)) return false
+
+  // The current `ask_user_question` package uses `ctx.ui.custom()`, which Pi
+  // does not support in RPC mode. Only emit the early question notification
+  // when a local interactive UI can actually present the questionnaire.
+  return ctx?.hasUI === true && getArgValue("--mode") !== "rpc"
+}
+
 export default function agentNotify(pi: ExtensionAPI) {
+  let waitingOnStructuredQuestion = false
+
   pi.on("agent_start", async (_event, ctx) => {
+    waitingOnStructuredQuestion = false
     if (!shouldEmitForContext(ctx)) return
     markWorkingStart()
   })
 
+  pi.on("tool_call", async (event, ctx) => {
+    if (event.toolName !== ASK_USER_QUESTION_TOOL_NAME) return
+    if (!shouldEmitStructuredQuestionForContext(ctx)) return
+
+    waitingOnStructuredQuestion = true
+    sendNotification("question", ctx.cwd)
+  })
+
+  pi.on("tool_execution_end", async (event, ctx) => {
+    if (event.toolName !== ASK_USER_QUESTION_TOOL_NAME) return
+
+    const shouldResumeWorking = waitingOnStructuredQuestion && !event.isError
+    waitingOnStructuredQuestion = false
+
+    if (!shouldResumeWorking) return
+    if (!shouldEmitStructuredQuestionForContext(ctx)) return
+
+    // `agent-notify question` clears the working indicator because Pi is
+    // waiting for user input. Restore it after the questionnaire closes so the
+    // post-answer portion of the run shows as active again.
+    markWorkingStart()
+  })
+
   pi.on("agent_end", async (event, ctx) => {
+    waitingOnStructuredQuestion = false
+
     const shouldEmit = shouldEmitForContext(ctx)
     const state = shouldEmit ? classifyPiAgentState(event.messages) : null
 

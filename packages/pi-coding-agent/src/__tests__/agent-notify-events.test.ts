@@ -37,6 +37,61 @@ describe("Pi agent-notify lifecycle integration", () => {
     )
   })
 
+  it("sends question when ask_user_question opens in interactive mode", async () => {
+    const handlers: Record<string, Function> = {}
+    const pi = {
+      on: vi.fn((event: string, handler: Function) => {
+        handlers[event] = handler
+      }),
+    }
+
+    agentNotify(pi as never)
+    await handlers.tool_call?.({ toolName: "ask_user_question" }, { cwd: "/tmp/project", hasUI: true })
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      "agent-notify",
+      ["question", "/tmp/project", "--tool", "pi-coding-agent"],
+      expect.objectContaining({ stdio: "ignore" }),
+    )
+  })
+
+  it("restores working after ask_user_question closes", async () => {
+    const handlers: Record<string, Function> = {}
+    const pi = {
+      on: vi.fn((event: string, handler: Function) => {
+        handlers[event] = handler
+      }),
+    }
+
+    agentNotify(pi as never)
+    await handlers.tool_call?.({ toolName: "ask_user_question" }, { cwd: "/tmp/project", hasUI: true })
+    spawnMock.mockClear()
+
+    await handlers.tool_execution_end?.({ toolName: "ask_user_question", isError: false }, { cwd: "/tmp/project", hasUI: true })
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      "agent-notify",
+      ["working-start"],
+      expect.objectContaining({ stdio: "ignore" }),
+    )
+  })
+
+  it("does not emit structured question notifications in rpc mode", async () => {
+    process.argv = ["node", "pi", "--mode", "rpc"]
+
+    const handlers: Record<string, Function> = {}
+    const pi = {
+      on: vi.fn((event: string, handler: Function) => {
+        handlers[event] = handler
+      }),
+    }
+
+    agentNotify(pi as never)
+    await handlers.tool_call?.({ toolName: "ask_user_question" }, { cwd: "/tmp/project", hasUI: true })
+
+    expect(spawnMock).not.toHaveBeenCalled()
+  })
+
   it("sends done on agent_end without separate working-stop", async () => {
     const handlers: Record<string, Function> = {}
     const pi = {

@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.16] — 2026-05-14
+
+### Fixed
+- Pi now sends a question notification as soon as the interactive `ask_user_question` dialog opens, instead of relying only on a trailing `?`
+- Pi restores the working indicator after the questionnaire closes so the post-answer portion of the run still shows as active
+
 ## [0.2.15] — 2026-05-13
 
 ### Fixed
