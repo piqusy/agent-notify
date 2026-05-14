@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.17] — 2026-05-14
+
+### Changed
+- Bun installs in CI, release automation, and local bootstrap now use frozen lockfiles, skip lifecycle scripts, and enforce a 72-hour minimum release age gate.
+- Added repo-level Bun install defaults via `bunfig.toml` so local installs match the hardened release pipeline.
+
 ## [0.2.16] — 2026-05-14
 
 ### Fixed
