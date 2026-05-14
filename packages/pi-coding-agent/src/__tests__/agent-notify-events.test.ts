@@ -92,6 +92,46 @@ describe("Pi agent-notify lifecycle integration", () => {
     expect(spawnMock).not.toHaveBeenCalled()
   })
 
+  it("clears working on session shutdown", async () => {
+    const handlers: Record<string, Function> = {}
+    const pi = {
+      on: vi.fn((event: string, handler: Function) => {
+        handlers[event] = handler
+      }),
+    }
+
+    agentNotify(pi as never)
+    await handlers.session_shutdown?.({}, { cwd: "/tmp/project", hasUI: true })
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      "agent-notify",
+      ["working-stop"],
+      expect.objectContaining({ stdio: "ignore" }),
+    )
+  })
+
+  it("clears working on shutdown after a structured question resumes work", async () => {
+    const handlers: Record<string, Function> = {}
+    const pi = {
+      on: vi.fn((event: string, handler: Function) => {
+        handlers[event] = handler
+      }),
+    }
+
+    agentNotify(pi as never)
+    await handlers.tool_call?.({ toolName: "ask_user_question" }, { cwd: "/tmp/project", hasUI: true })
+    await handlers.tool_execution_end?.({ toolName: "ask_user_question", isError: false }, { cwd: "/tmp/project", hasUI: true })
+    spawnMock.mockClear()
+
+    await handlers.session_shutdown?.({}, { cwd: "/tmp/project", hasUI: true })
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      "agent-notify",
+      ["working-stop"],
+      expect.objectContaining({ stdio: "ignore" }),
+    )
+  })
+
   it("sends done on agent_end without separate working-stop", async () => {
     const handlers: Record<string, Function> = {}
     const pi = {

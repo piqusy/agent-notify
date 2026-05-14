@@ -172,6 +172,16 @@ export default function agentNotify(pi: ExtensionAPI) {
     markWorkingStart()
   })
 
+  pi.on("session_shutdown", async (_event, ctx) => {
+    waitingOnStructuredQuestion = false
+    if (!shouldEmitForContext(ctx)) return
+
+    // Pi can shut down while a turn is still active (for example right after a
+    // questionnaire returns, before `agent_end` fires). Clear the tab state so
+    // the pane is never left showing stale "working" UI after exit.
+    markWorkingStop()
+  })
+
   pi.on("agent_end", async (event, ctx) => {
     waitingOnStructuredQuestion = false
 

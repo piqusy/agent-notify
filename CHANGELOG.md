@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.2.18] — 2026-05-14
+
+### Fixed
+- Pi now clears the working indicator on session shutdown, preventing stale working tabs when Pi is closed during a structured question flow
+
 ## [0.2.17] — 2026-05-14
 
 ### Changed
