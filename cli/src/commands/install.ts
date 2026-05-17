@@ -1,4 +1,4 @@
-import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
+import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { dirname, isAbsolute, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -71,9 +71,17 @@ function ancestorDirs(start: string): string[] {
 }
 
 function trustedCandidateRoots(): string[] {
+  const execDir = dirname(process.execPath)
+  let realExecDir = execDir
+  try {
+    realExecDir = dirname(realpathSync(process.execPath))
+  } catch {
+    // symlink resolution failed, fall back to execPath as-is
+  }
   return unique([
     ...ancestorDirs(MODULE_DIR),
-    ...ancestorDirs(dirname(process.execPath)),
+    ...ancestorDirs(execDir),
+    ...ancestorDirs(realExecDir),
   ])
 }
 
