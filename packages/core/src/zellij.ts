@@ -7,19 +7,21 @@ import type { Config } from "./types.js"
 const ZELLIJ_STATE_PREFIX = "agent-notify-zellij-state"
 const POLLER_PID_FILE = "poller.pid"
 const POLLER_VERSION_FILE = "poller.version"
-const CURRENT_POLLER_VERSION = "4"
+const CURRENT_POLLER_VERSION = "5"
 
 const TAB_NOTIFY_PREFIX = " ● "
 const TAB_WORKING_PREFIX = " ○ "
 const AUTO_TAB_NAME_PATTERN = /^Tab #\d+$/
-const TREE_PREFIX_PATTERN = /^[┌│└├] /
 const GENERIC_TAB_PREFIX_PATTERN = /^\s*(?:(?:[○●◐]|[┌│└├])\s*)+/
+const DEFAULT_TREE_GROUP_PREFIXES = ["┌ ", "│ ", "└ ", "├ "]
 
-/** Extract leading tree-grouping prefix (┌ │ └ ├ + space) preserving it across notification cycles. */
-function extractTreePrefix(name: string): { treePrefix: string; base: string } {
-  const match = name.match(TREE_PREFIX_PATTERN)
-  if (match) {
-    return { treePrefix: match[0], base: name.slice(match[0].length) }
+/** Extract leading tree-grouping prefix, preserving it across notification cycles. */
+function extractTreePrefix(name: string, treeGroupPrefixes?: string[]): { treePrefix: string; base: string } {
+  const prefixes = treeGroupPrefixes ?? DEFAULT_TREE_GROUP_PREFIXES
+  for (const prefix of prefixes) {
+    if (name.startsWith(prefix)) {
+      return { treePrefix: prefix, base: name.slice(prefix.length) }
+    }
   }
   return { treePrefix: "", base: name }
 }
@@ -112,7 +114,14 @@ function stripKnownTabPrefixes(tabName: string, prefixes: string[]): string {
   return tabName.replace(/^\s*[●○◐]\s*/, "")
 }
 
-function stripGenericTabPrefixes(tabName: string): string {
+function stripGenericTabPrefixes(tabName: string, treeGroupPrefixes?: string[]): string {
+  if (treeGroupPrefixes) {
+    for (const prefix of treeGroupPrefixes) {
+      if (tabName.startsWith(prefix)) {
+        return tabName.slice(prefix.length)
+      }
+    }
+  }
   return tabName.replace(GENERIC_TAB_PREFIX_PATTERN, "")
 }
 
@@ -638,7 +647,7 @@ function stopPoller(pid: number): void {
   }
 }
 
-function ensureSessionPoller(sessionName: string | null, attentionPrefix: string, workingPrefix: string): void {
+function ensureSessionPoller(sessionName: string | null, attentionPrefix: string, workingPrefix: string, treeGroupPrefixes: string[]): void {
   const startedAt = process.hrtime.bigint()
   const pid = readPollerPid(sessionName)
   const pollerVersion = readPollerVersion(sessionName)
@@ -688,10 +697,30 @@ strip_prefix() {
   esac
 }
 get_tree_prefix() {
-  printf '%s' "$1" | perl -ne 'printf "%s", $1 if /^(\xe2\x94[\x8c\x9c\x94\x82] )/'
+  name="$1"
+  result=""
+  while IFS= read -r pfx; do
+    [ -z "$pfx" ] && continue
+    case "$name" in
+      "$pfx"*) result="$pfx"; break ;;
+    esac
+  done <<EOF
+$TREE_GROUP_PREFIXES
+EOF
+  printf '%s' "$result"
 }
 strip_tree() {
-  printf '%s' "$1" | perl -pe 's/^(\xe2\x94[\x8c\x9c\x94\x82]) //'
+  name="$1"
+  result="$name"
+  while IFS= read -r pfx; do
+    [ -z "$pfx" ] && continue
+    case "$name" in
+      "$pfx"*) result="\${name#"$pfx"}"; break ;;
+    esac
+  done <<EOF
+$TREE_GROUP_PREFIXES
+EOF
+  printf '%s' "$result"
 }
 rename_tab_for_state() {
   tab_id="$1"
@@ -861,6 +890,7 @@ done
       ZELLIJ_EXECUTABLE: executable,
       ATTENTION_PREFIX: attentionPrefix,
       WORKING_PREFIX: workingPrefix,
+      TREE_GROUP_PREFIXES: treeGroupPrefixes.join("\n"),
     },
   })
 
@@ -1049,7 +1079,8 @@ export function markTabNotified(tabId: number, originalName: string, options: Ze
   const workingPrefix = currentWorkingPrefix(options.workingPrefix)
   const paneIndicator = options.paneIndicator
   const effectiveTabIndicatorEnabled = (options.tabIndicator?.enabled ?? true) || Boolean(paneIndicator?.enabled)
-  const { treePrefix, base: nameWithoutTree } = extractTreePrefix(originalName)
+  const treeGroupPrefixes = options.tabIndicator?.treeGroupPrefixes ?? DEFAULT_TREE_GROUP_PREFIXES
+  const { treePrefix, base: nameWithoutTree } = extractTreePrefix(originalName, treeGroupPrefixes)
   const restoreTabName = `${treePrefix}${stripKnownTabPrefixes(nameWithoutTree, [tabPrefix, workingPrefix]).trim()}`
   const indicatorTabName = resolveVisibleTabName(nameWithoutTree, options.visibleTabName, [tabPrefix, workingPrefix])
   const finalizeAuxiliaryWork = () => {
@@ -1067,7 +1098,7 @@ export function markTabNotified(tabId: number, originalName: string, options: Ze
       })
     }
 
-    ensureSessionPoller(sessionName, tabPrefix, workingPrefix)
+    ensureSessionPoller(sessionName, tabPrefix, workingPrefix, treeGroupPrefixes)
     writeDebugLog({ event: "mark-tab-notified-end", elapsedMs: elapsedMs(startedAt), tabId, paneId, paneIndicatorApplied })
   }
 
@@ -1129,10 +1160,11 @@ export function markPaneWorking(tabId: number, originalName: string, options: Ze
   const paneId = Number.isNaN(originPaneId) ? null : originPaneId
   const tabPrefix = currentTabPrefix(options.tabIndicator)
   const workingPrefix = currentWorkingPrefix(options.workingPrefix)
+  const treeGroupPrefixes = options.tabIndicator?.treeGroupPrefixes ?? DEFAULT_TREE_GROUP_PREFIXES
 
   if (paneId === null) return
 
-  const { treePrefix, base: nameWithoutTree } = extractTreePrefix(originalName)
+  const { treePrefix, base: nameWithoutTree } = extractTreePrefix(originalName, treeGroupPrefixes)
   const restoreTabName = `${treePrefix}${stripKnownTabPrefixes(nameWithoutTree, [tabPrefix, workingPrefix]).trim()}`
   const indicatorTabName = resolveVisibleTabName(nameWithoutTree, options.visibleTabName, [tabPrefix, workingPrefix])
   const existing = readPendingPaneState(sessionName, tabId, paneId)
@@ -1152,7 +1184,7 @@ export function markPaneWorking(tabId: number, originalName: string, options: Ze
 
   // Preserve the current visible name in state. The poller derives the correct tab-level
   // state, including attention > working precedence across multiple panes.
-  ensureSessionPoller(sessionName, tabPrefix, workingPrefix)
+  ensureSessionPoller(sessionName, tabPrefix, workingPrefix, treeGroupPrefixes)
 }
 
 /**
@@ -1165,6 +1197,7 @@ export function clearPaneWorking(tabId: number, options: ZellijNotifyOptions = {
   const paneId = Number.isNaN(originPaneId) ? null : originPaneId
   const tabPrefix = currentTabPrefix(options.tabIndicator)
   const workingPrefix = currentWorkingPrefix(options.workingPrefix)
+  const treeGroupPrefixes = options.tabIndicator?.treeGroupPrefixes ?? DEFAULT_TREE_GROUP_PREFIXES
 
   writeDebugLog({ event: "clear-pane-working-start", tabId, paneId, sessionName })
 
@@ -1191,7 +1224,7 @@ export function clearPaneWorking(tabId: number, options: ZellijNotifyOptions = {
     writePendingPaneState(sessionName, tabId, paneId, nextState)
   }
 
-  ensureSessionPoller(sessionName, tabPrefix, workingPrefix)
+  ensureSessionPoller(sessionName, tabPrefix, workingPrefix, treeGroupPrefixes)
   writeDebugLog({ event: "clear-pane-working-end", elapsedMs: elapsedMs(startedAt), tabId, paneId })
 }
 

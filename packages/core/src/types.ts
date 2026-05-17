@@ -24,6 +24,7 @@ export interface ZellijTabIndicatorConfig {
   enabled: boolean
   prefix: string
   workingPrefix: string
+  treeGroupPrefixes?: string[]
 }
 
 export interface ZellijPaneIndicatorConfig {
