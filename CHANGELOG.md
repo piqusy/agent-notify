@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.2.19] — 2026-05-17
+
+### Fixed
+- Preserve zellij tree-grouping prefixes (┌ │ └) across agent-notify tab rename cycles
+
 ## [0.2.18] — 2026-05-14
 
 ### Fixed
