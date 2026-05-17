@@ -7,12 +7,22 @@ import type { Config } from "./types.js"
 const ZELLIJ_STATE_PREFIX = "agent-notify-zellij-state"
 const POLLER_PID_FILE = "poller.pid"
 const POLLER_VERSION_FILE = "poller.version"
-const CURRENT_POLLER_VERSION = "3"
+const CURRENT_POLLER_VERSION = "4"
 
 const TAB_NOTIFY_PREFIX = " ● "
 const TAB_WORKING_PREFIX = " ○ "
 const AUTO_TAB_NAME_PATTERN = /^Tab #\d+$/
-const GENERIC_TAB_PREFIX_PATTERN = /^\s*(?:[○●◐]\s*)+/
+const TREE_PREFIX_PATTERN = /^[┌│└├] /
+const GENERIC_TAB_PREFIX_PATTERN = /^\s*(?:(?:[○●◐]|[┌│└├])\s*)+/
+
+/** Extract leading tree-grouping prefix (┌ │ └ ├ + space) preserving it across notification cycles. */
+function extractTreePrefix(name: string): { treePrefix: string; base: string } {
+  const match = name.match(TREE_PREFIX_PATTERN)
+  if (match) {
+    return { treePrefix: match[0], base: name.slice(match[0].length) }
+  }
+  return { treePrefix: "", base: name }
+}
 
 function writeDebugLog(payload: Record<string, unknown>): void {
   const file = process.env.AGENT_NOTIFY_DEBUG_LOG?.trim()
@@ -195,18 +205,61 @@ function resolveZellijExecutable(): string {
   return binaryNames[0]!
 }
 
+const ACTION_LOCK_FILE = ".zellij-action-lock"
+
+function actionLockPath(sessionName: string | null | undefined): string {
+  return join(sessionStateDir(sessionName), ACTION_LOCK_FILE)
+}
+
+/**
+ * Tries to acquire a lock via mkdir (atomic on all POSIX, no external deps).
+ * Non-blocking: returns immediately. Returns true if lock acquired.
+ */
+function tryAcquireActionLock(lockPath: string): boolean {
+  try {
+    mkdirSync(lockPath)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function releaseActionLock(lockPath: string): void {
+  try {
+    rmSync(lockPath, { recursive: false })
+  } catch { /* already released */ }
+}
+
+function clearStaleActionLock(lockPath: string): void {
+  try {
+    const stat = require("node:fs").statSync(lockPath)
+    if (Date.now() - stat.mtimeMs > 10_000) {
+      try { rmSync(lockPath, { recursive: false }) } catch { /* race */ }
+    }
+  } catch { /* lock doesn't exist */ }
+}
+
 function runZellijActionSync(
   args: string[],
-  options: RunZellijSyncOptions = {},
+  options: RunZellijSyncOptions & { sessionNameForLock?: string | null } = {},
 ) {
   const executable = resolveZellijExecutable()
   const baseArgs = options.sessionName ? ["--session", options.sessionName] : []
+  const lockPath = actionLockPath(options.sessionNameForLock ?? options.sessionName)
 
-  return spawnSync(executable, [...baseArgs, "action", ...args], {
-    stdio: options.captureOutput ? ["ignore", "pipe", "pipe"] : "ignore",
-    ...(options.captureOutput ? { encoding: "utf8" as const } : {}),
-    ...(options.scrubEnv ? { env: scrubbedZellijEnv() } : {}),
-  })
+  // Ensure parent dir exists for the lock
+  try { mkdirSync(join(lockPath, ".."), { recursive: true }) } catch { /* exists */ }
+  clearStaleActionLock(lockPath)
+  const locked = tryAcquireActionLock(lockPath)
+  try {
+    return spawnSync(executable, [...baseArgs, "action", ...args], {
+      stdio: options.captureOutput ? ["ignore", "pipe", "pipe"] : "ignore",
+      ...(options.captureOutput ? { encoding: "utf8" as const } : {}),
+      ...(options.scrubEnv ? { env: scrubbedZellijEnv() } : {}),
+    })
+  } finally {
+    if (locked) releaseActionLock(lockPath)
+  }
 }
 
 function zellijCacheRootCandidates(): string[] {
@@ -602,12 +655,29 @@ function ensureSessionPoller(sessionName: string | null, attentionPrefix: string
 
   const script = `
 set -eu
+LOCK_DIR="$STATE_DIR/${ACTION_LOCK_FILE}"
+acquire_lock() {
+  retries=60
+  while [ $retries -gt 0 ]; do
+    if mkdir "$LOCK_DIR" 2>/dev/null; then
+      return 0
+    fi
+    sleep 0.05
+    retries=$((retries - 1))
+  done
+  return 0
+}
+release_lock() {
+  rmdir "$LOCK_DIR" 2>/dev/null || true
+}
 run_zellij() {
+  acquire_lock
   if [ -n "$SESSION_NAME" ]; then
-    env -u ZELLIJ -u ZELLIJ_PANE_ID -u ZELLIJ_SESSION_NAME "$ZELLIJ_EXECUTABLE" --session "$SESSION_NAME" action "$@"
+    env -u ZELLIJ -u ZELLIJ_PANE_ID -u ZELLIJ_SESSION_NAME "$ZELLIJ_EXECUTABLE" --session "$SESSION_NAME" action "$@" || { release_lock; return 1; }
   else
-    env -u ZELLIJ -u ZELLIJ_PANE_ID -u ZELLIJ_SESSION_NAME "$ZELLIJ_EXECUTABLE" action "$@"
+    env -u ZELLIJ -u ZELLIJ_PANE_ID -u ZELLIJ_SESSION_NAME "$ZELLIJ_EXECUTABLE" action "$@" || { release_lock; return 1; }
   fi
+  release_lock
 }
 strip_prefix() {
   name="$1"
@@ -617,35 +687,53 @@ strip_prefix() {
     *) printf '%s' "$name" | sed -E 's/^[[:space:]]*[●○◐][[:space:]]*//' ;;
   esac
 }
+get_tree_prefix() {
+  printf '%s' "$1" | perl -ne 'printf "%s", $1 if /^(\xe2\x94[\x8c\x9c\x94\x82] )/'
+}
+strip_tree() {
+  printf '%s' "$1" | perl -pe 's/^(\xe2\x94[\x8c\x9c\x94\x82]) //'
+}
 rename_tab_for_state() {
   tab_id="$1"
   current_name="$2"
   desired_state="$3"
   indicator_name="$4"
   restore_name="$5"
-  stripped_name="$(strip_prefix "$current_name")"
+  tree_pfx="$(get_tree_prefix "$current_name")"
+  no_tree="$(strip_tree "$current_name")"
+  stripped_name="$(strip_prefix "$no_tree")"
   [ -n "$indicator_name" ] || indicator_name="$stripped_name"
   [ -n "$restore_name" ] || restore_name="$stripped_name"
   case "$desired_state" in
-    attention) desired_name="$ATTENTION_PREFIX$indicator_name" ;;
-    working) desired_name="$WORKING_PREFIX$indicator_name" ;;
-    none) desired_name="$restore_name" ;;
+    attention) desired_name="\${tree_pfx}\${ATTENTION_PREFIX}\${indicator_name}" ;;
+    working) desired_name="\${tree_pfx}\${WORKING_PREFIX}\${indicator_name}" ;;
+    none) desired_name="\${tree_pfx}\${restore_name}" ;;
     *) desired_name="$current_name" ;;
   esac
 
   if [ "$desired_name" != "$current_name" ]; then
-    run_zellij rename-tab -t "$tab_id" "$desired_name" >/dev/null 2>&1 || true
+    if ! run_zellij rename-tab -t "$tab_id" "$desired_name" >/dev/null 2>&1; then
+      sleep 0.5
+      run_zellij rename-tab -t "$tab_id" "$desired_name" >/dev/null 2>&1 || true
+    fi
   fi
 }
 cleanup() {
   rm -f "$PID_FILE" "$VERSION_FILE"
   rmdir "$STATE_DIR" 2>/dev/null || true
 }
+fail_count=0
 trap cleanup EXIT INT TERM
 while :; do
   tabs_json="$(run_zellij list-tabs --json 2>/dev/null || true)"
   panes_json="$(run_zellij list-panes --json 2>/dev/null || true)"
   clients="$(run_zellij list-clients 2>/dev/null || true)"
+  if [ -z "$tabs_json" ]; then
+    fail_count=$((fail_count + 1))
+    sleep $(( fail_count > 3 ? 5 : fail_count ))
+    continue
+  fi
+  fail_count=0
   client_pane_ids="$(printf '%s\n' "$clients" | awk 'NR > 1 { print $2 }' | sed -E 's/^(terminal_|plugin_)//')"
   pending_any=false
   for tab_dir in "$STATE_DIR"/tab-*; do
@@ -727,7 +815,8 @@ while :; do
     restore_tab_name="$selected_restore_name"
     indicator_tab_name="$selected_indicator_name"
     if [ -z "$restore_tab_name" ] && [ -n "$current_tab_name" ]; then
-      restore_tab_name="$(strip_prefix "$current_tab_name")"
+      tree_pfx="$(get_tree_prefix "$current_tab_name")"
+      restore_tab_name="\${tree_pfx}$(strip_prefix "$(strip_tree "$current_tab_name")")"
     fi
     if [ -z "$indicator_tab_name" ]; then
       indicator_tab_name="$restore_tab_name"
@@ -960,8 +1049,9 @@ export function markTabNotified(tabId: number, originalName: string, options: Ze
   const workingPrefix = currentWorkingPrefix(options.workingPrefix)
   const paneIndicator = options.paneIndicator
   const effectiveTabIndicatorEnabled = (options.tabIndicator?.enabled ?? true) || Boolean(paneIndicator?.enabled)
-  const restoreTabName = stripKnownTabPrefixes(originalName, [tabPrefix, workingPrefix]).trim()
-  const indicatorTabName = resolveVisibleTabName(originalName, options.visibleTabName, [tabPrefix, workingPrefix])
+  const { treePrefix, base: nameWithoutTree } = extractTreePrefix(originalName)
+  const restoreTabName = `${treePrefix}${stripKnownTabPrefixes(nameWithoutTree, [tabPrefix, workingPrefix]).trim()}`
+  const indicatorTabName = resolveVisibleTabName(nameWithoutTree, options.visibleTabName, [tabPrefix, workingPrefix])
   const finalizeAuxiliaryWork = () => {
     const paneIndicatorApplied = paneId === null ? false : applyPaneIndicator(sessionName, paneId, paneIndicator)
 
@@ -994,7 +1084,7 @@ export function markTabNotified(tabId: number, originalName: string, options: Ze
     return
   }
 
-  const desiredName = `${tabPrefix}${indicatorTabName}`
+  const desiredName = `${treePrefix}${tabPrefix}${indicatorTabName}`
 
   try {
     const renameStartedAt = process.hrtime.bigint()
@@ -1042,8 +1132,9 @@ export function markPaneWorking(tabId: number, originalName: string, options: Ze
 
   if (paneId === null) return
 
-  const restoreTabName = stripKnownTabPrefixes(originalName, [tabPrefix, workingPrefix]).trim()
-  const indicatorTabName = resolveVisibleTabName(originalName, options.visibleTabName, [tabPrefix, workingPrefix])
+  const { treePrefix, base: nameWithoutTree } = extractTreePrefix(originalName)
+  const restoreTabName = `${treePrefix}${stripKnownTabPrefixes(nameWithoutTree, [tabPrefix, workingPrefix]).trim()}`
+  const indicatorTabName = resolveVisibleTabName(nameWithoutTree, options.visibleTabName, [tabPrefix, workingPrefix])
   const existing = readPendingPaneState(sessionName, tabId, paneId)
   if (existing?.paneIndicatorApplied) {
     clearPaneIndicator(sessionName, paneId)
