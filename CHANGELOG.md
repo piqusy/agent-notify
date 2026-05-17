@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.2.21] — 2026-05-17
+
+### Fixed
+- Prevent double tree-group prefix when poller restores tab name after done notification
+
 ## [0.2.20] — 2026-05-17
 
 ### Fixed

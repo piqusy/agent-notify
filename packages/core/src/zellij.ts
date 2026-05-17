@@ -1081,7 +1081,9 @@ export function markTabNotified(tabId: number, originalName: string, options: Ze
   const effectiveTabIndicatorEnabled = (options.tabIndicator?.enabled ?? true) || Boolean(paneIndicator?.enabled)
   const treeGroupPrefixes = options.tabIndicator?.treeGroupPrefixes ?? DEFAULT_TREE_GROUP_PREFIXES
   const { treePrefix, base: nameWithoutTree } = extractTreePrefix(originalName, treeGroupPrefixes)
-  const restoreTabName = `${treePrefix}${stripKnownTabPrefixes(nameWithoutTree, [tabPrefix, workingPrefix]).trim()}`
+  // Note: treePrefix is intentionally excluded from restoreTabName — the poller's
+  // rename_tab_for_state re-adds tree_pfx from the current tab name.
+  const restoreTabName = stripKnownTabPrefixes(nameWithoutTree, [tabPrefix, workingPrefix]).trim()
   const indicatorTabName = resolveVisibleTabName(nameWithoutTree, options.visibleTabName, [tabPrefix, workingPrefix])
   const finalizeAuxiliaryWork = () => {
     const paneIndicatorApplied = paneId === null ? false : applyPaneIndicator(sessionName, paneId, paneIndicator)
@@ -1165,7 +1167,9 @@ export function markPaneWorking(tabId: number, originalName: string, options: Ze
   if (paneId === null) return
 
   const { treePrefix, base: nameWithoutTree } = extractTreePrefix(originalName, treeGroupPrefixes)
-  const restoreTabName = `${treePrefix}${stripKnownTabPrefixes(nameWithoutTree, [tabPrefix, workingPrefix]).trim()}`
+  // Note: treePrefix is intentionally excluded from restoreTabName — the poller's
+  // rename_tab_for_state re-adds tree_pfx from the current tab name.
+  const restoreTabName = stripKnownTabPrefixes(nameWithoutTree, [tabPrefix, workingPrefix]).trim()
   const indicatorTabName = resolveVisibleTabName(nameWithoutTree, options.visibleTabName, [tabPrefix, workingPrefix])
   const existing = readPendingPaneState(sessionName, tabId, paneId)
   if (existing?.paneIndicatorApplied) {
