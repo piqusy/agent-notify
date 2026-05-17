@@ -21,4 +21,9 @@ execSync(`git add package.json cli/package.json packages/core/package.json packa
 execSync(`git commit -m "chore(release): bump to ${version}"`, { stdio: "inherit" })
 execSync(`git tag v${version}`, { stdio: "inherit" })
 
+const changelog = readFileSync(join(repoRoot, "CHANGELOG.md"), "utf8")
+if (!changelog.includes(`## [${version}]`)) {
+  console.warn(`\n⚠  CHANGELOG.md has no entry for [${version}] — add one before pushing or the release check will fail.`)
+}
+
 console.log(`\nBumped to ${version}. Push with:\n  git push origin main && git push origin v${version}`)
