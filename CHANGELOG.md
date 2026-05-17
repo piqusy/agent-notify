@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.20] — 2026-05-17
+
+### Fixed
+- Resolve symlinks when locating bundled assets so Homebrew installs can find hooks
+- Make zellij tree-group prefixes configurable per user via `treeGroupPrefixes` in config
+
 ## [0.2.19] — 2026-05-17
 
 ### Fixed
