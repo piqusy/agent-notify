@@ -7,7 +7,7 @@ import type { Config } from "./types.js"
 const ZELLIJ_STATE_PREFIX = "agent-notify-zellij-state"
 const POLLER_PID_FILE = "poller.pid"
 const POLLER_VERSION_FILE = "poller.version"
-const CURRENT_POLLER_VERSION = "5"
+const CURRENT_POLLER_VERSION = "6"
 
 const TAB_NOTIFY_PREFIX = " ● "
 const TAB_WORKING_PREFIX = " ○ "
@@ -811,6 +811,16 @@ while :; do
         working_at="$(jq -r '.workingAt // empty' "$pane_file" 2>/dev/null || true)"
       fi
 
+      updated_at="$(jq -r '.updatedAt // 0' "$pane_file" 2>/dev/null || echo 0)"
+      case "$updated_at" in
+        ''|*[!0-9]*) updated_at=0 ;;
+      esac
+      if [ "$updated_at" -ge "$latest_updated_at" ]; then
+        latest_updated_at="$updated_at"
+        selected_indicator_name="$(jq -r '.indicatorTabName // empty' "$pane_file" 2>/dev/null || true)"
+        selected_restore_name="$(jq -r '.restoreTabName // empty' "$pane_file" 2>/dev/null || true)"
+      fi
+
       if [ -z "$attention_at" ] && [ -z "$working_at" ]; then
         rm -f "$pane_file"
         continue
@@ -820,16 +830,6 @@ while :; do
         has_attention=true
       elif [ -n "$working_at" ]; then
         has_working=true
-      fi
-
-      updated_at="$(jq -r '.updatedAt // 0' "$pane_file" 2>/dev/null || echo 0)"
-      case "$updated_at" in
-        ''|*[!0-9]*) updated_at=0 ;;
-      esac
-      if [ "$updated_at" -ge "$latest_updated_at" ]; then
-        latest_updated_at="$updated_at"
-        selected_indicator_name="$(jq -r '.indicatorTabName // empty' "$pane_file" 2>/dev/null || true)"
-        selected_restore_name="$(jq -r '.restoreTabName // empty' "$pane_file" 2>/dev/null || true)"
       fi
     done
 

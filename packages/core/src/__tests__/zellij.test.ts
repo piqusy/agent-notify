@@ -406,6 +406,11 @@ describe("markTabNotified", () => {
     expect(args[1]).toContain('select(.id == $paneId) | .tab_id')
     expect(args[1]).toContain('run_zellij set-pane-color --pane-id "$pane_id" --reset')
     expect(args[1]).toContain('[ "$pane_tab_id" != "$tab_id" ]')
+    const restoreNameRead = "selected_restore_name=\"$(jq -r '.restoreTabName // empty' \"$pane_file\" 2>/dev/null || true)\""
+    const deleteEmptyState = 'if [ -z "$attention_at" ] && [ -z "$working_at" ]; then'
+    expect(args[1].indexOf(restoreNameRead)).toBeGreaterThan(-1)
+    expect(args[1].indexOf(deleteEmptyState)).toBeGreaterThan(-1)
+    expect(args[1].indexOf(restoreNameRead)).toBeLessThan(args[1].indexOf(deleteEmptyState))
     expect(opts.env.WORKING_PREFIX).toBe(" ○ ")
     expect(opts.env.ZELLIJ_EXECUTABLE).toBe(executable)
     expect(opts.env.VERSION_FILE).toContain("poller.version")

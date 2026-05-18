@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.2.22] — 2026-05-18
+
+### Fixed
+- Restore the saved tab name after clearing a notification/work indicator, instead of leaving an auto-named pane-title fallback like `L L dept - #565j`
+
 ## [0.2.21] — 2026-05-17
 
 ### Fixed
