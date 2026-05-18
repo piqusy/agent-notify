@@ -315,6 +315,61 @@ panes {
       expect.objectContaining({ stdio: ["ignore", "pipe", "pipe"] }),
     )
   })
+
+  it("strips tree and working prefixes before resolving visible names for auto-named tabs", async () => {
+    const executable = installFakeZellijBinary()
+    configureTempZellijCache("test-session-tree", `tabs {
+  tab {
+    position 6
+    name "└ Tab #23"
+    active true
+    tab_id 22
+  }
+}
+panes {
+  pane {
+    id 162
+    is_plugin false
+    tab_position 6
+  }
+}`)
+    process.env.ZELLIJ_SESSION_NAME = "test-session-tree"
+    process.env.ZELLIJ_PANE_ID = "162"
+
+    const spawnSyncMock = childProcess.spawnSync as unknown as ReturnType<typeof vi.fn>
+    spawnSyncMock.mockImplementation((command: string, args: string[]) => {
+      if (args.includes("save-session")) {
+        return { status: 0 }
+      }
+
+      if (args.includes("list-panes")) {
+        return {
+          status: 0,
+          stdout: JSON.stringify([{ id: 162, is_plugin: false, tab_id: 22, tab_name: "└ ○ Tab #23", title: "dept - #565" }]),
+        }
+      }
+
+      throw new Error(`unexpected command: ${command} ${args.join(" ")}`)
+    })
+
+    await expect(getCurrentTabInfo()).resolves.toEqual({
+      tabId: 22,
+      tabName: "└ Tab #23",
+      visibleTabName: "dept - #565",
+    })
+    expect(spawnSyncMock).toHaveBeenNthCalledWith(
+      1,
+      executable,
+      ["--session", "test-session-tree", "action", "save-session"],
+      expect.anything(),
+    )
+    expect(spawnSyncMock).toHaveBeenNthCalledWith(
+      2,
+      executable,
+      ["--session", "test-session-tree", "action", "list-panes", "--json", "--tab"],
+      expect.objectContaining({ stdio: ["ignore", "pipe", "pipe"] }),
+    )
+  })
 })
 
 describe("markTabNotified", () => {
@@ -355,6 +410,23 @@ describe("markTabNotified", () => {
     expect(spawnSyncMock).toHaveBeenCalledWith(
       executable,
       ["--session", "test-session-visible", "action", "rename-tab", "-t", "12", " ● π - agent-notify"],
+      { stdio: "ignore" },
+    )
+  })
+
+  it("preserves tree prefixes and replaces working prefixes for grouped tabs", () => {
+    const executable = installFakeZellijBinary()
+    cleanupSessionState("test-session-tree-visible")
+    process.env.ZELLIJ_PANE_ID = "12"
+    process.env.ZELLIJ_SESSION_NAME = "test-session-tree-visible"
+
+    const spawnSyncMock = childProcess.spawnSync as unknown as { mock: { calls: unknown[][] } }
+
+    markTabNotified(12, "└ ○ Tab #23", { visibleTabName: "dept - #565" })
+
+    expect(spawnSyncMock).toHaveBeenCalledWith(
+      executable,
+      ["--session", "test-session-tree-visible", "action", "rename-tab", "-t", "12", "└ ● dept - #565"],
       { stdio: "ignore" },
     )
   })

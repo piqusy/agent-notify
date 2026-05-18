@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.2.23] — 2026-05-18
+
+### Fixed
+- Normalize grouped Zellij tab rename prefixes so tree-prefixed tabs render `└ ● name` / `└ ○ name` without double spacing, and add regression coverage for grouped auto-named tabs.
+
 ## [0.2.22] — 2026-05-18
 
 ### Fixed

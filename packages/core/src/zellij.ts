@@ -26,6 +26,14 @@ function extractTreePrefix(name: string, treeGroupPrefixes?: string[]): { treePr
   return { treePrefix: "", base: name }
 }
 
+function composeStatefulTabName(treePrefix: string, statePrefix: string, label: string): string {
+  const normalizedStatePrefix = treePrefix.endsWith(" ") && statePrefix.startsWith(" ")
+    ? statePrefix.slice(1)
+    : statePrefix
+
+  return `${treePrefix}${normalizedStatePrefix}${label}`
+}
+
 function writeDebugLog(payload: Record<string, unknown>): void {
   const file = process.env.AGENT_NOTIFY_DEBUG_LOG?.trim()
   if (!file) return
@@ -722,6 +730,22 @@ $TREE_GROUP_PREFIXES
 EOF
   printf '%s' "$result"
 }
+compose_stateful_name() {
+  tree_pfx="$1"
+  state_pfx="$2"
+  label="$3"
+  normalized_state_pfx="$state_pfx"
+
+  case "$tree_pfx" in
+    *" ")
+      case "$normalized_state_pfx" in
+        " "*) normalized_state_pfx="\${normalized_state_pfx# }" ;;
+      esac
+      ;;
+  esac
+
+  printf '%s%s%s' "$tree_pfx" "$normalized_state_pfx" "$label"
+}
 rename_tab_for_state() {
   tab_id="$1"
   current_name="$2"
@@ -734,8 +758,8 @@ rename_tab_for_state() {
   [ -n "$indicator_name" ] || indicator_name="$stripped_name"
   [ -n "$restore_name" ] || restore_name="$stripped_name"
   case "$desired_state" in
-    attention) desired_name="\${tree_pfx}\${ATTENTION_PREFIX}\${indicator_name}" ;;
-    working) desired_name="\${tree_pfx}\${WORKING_PREFIX}\${indicator_name}" ;;
+    attention) desired_name="$(compose_stateful_name "$tree_pfx" "$ATTENTION_PREFIX" "$indicator_name")" ;;
+    working) desired_name="$(compose_stateful_name "$tree_pfx" "$WORKING_PREFIX" "$indicator_name")" ;;
     none) desired_name="\${tree_pfx}\${restore_name}" ;;
     *) desired_name="$current_name" ;;
   esac
@@ -1117,7 +1141,7 @@ export function markTabNotified(tabId: number, originalName: string, options: Ze
     return
   }
 
-  const desiredName = `${treePrefix}${tabPrefix}${indicatorTabName}`
+  const desiredName = composeStatefulTabName(treePrefix, tabPrefix, indicatorTabName)
 
   try {
     const renameStartedAt = process.hrtime.bigint()
