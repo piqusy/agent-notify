@@ -316,6 +316,61 @@ panes {
     )
   })
 
+  it("salvages list-panes JSON when junk precedes the array", async () => {
+    const executable = installFakeZellijBinary()
+    configureTempZellijCache("test-session-malformed-panes", `tabs {
+  tab {
+    position 2
+    name "Tab #23"
+    active true
+    tab_id 22
+  }
+}
+panes {
+  pane {
+    id 162
+    is_plugin false
+    tab_position 2
+  }
+}`)
+    process.env.ZELLIJ_SESSION_NAME = "test-session-malformed-panes"
+    process.env.ZELLIJ_PANE_ID = "162"
+
+    const spawnSyncMock = childProcess.spawnSync as unknown as ReturnType<typeof vi.fn>
+    spawnSyncMock.mockImplementation((command: string, args: string[]) => {
+      if (args.includes("save-session")) {
+        return { status: 0 }
+      }
+
+      if (args.includes("list-panes")) {
+        return {
+          status: 0,
+          stdout: 'CLIENT_ID=abc\n' + JSON.stringify([{ id: 162, is_plugin: false, tab_id: 22, tab_name: " ○ Tab #23", title: "π - agent-notify" }]),
+        }
+      }
+
+      throw new Error(`unexpected command: ${command} ${args.join(" ")}`)
+    })
+
+    await expect(getCurrentTabInfo()).resolves.toEqual({
+      tabId: 22,
+      tabName: "Tab #23",
+      visibleTabName: "π - agent-notify",
+    })
+    expect(spawnSyncMock).toHaveBeenNthCalledWith(
+      1,
+      executable,
+      ["--session", "test-session-malformed-panes", "action", "save-session"],
+      expect.anything(),
+    )
+    expect(spawnSyncMock).toHaveBeenNthCalledWith(
+      2,
+      executable,
+      ["--session", "test-session-malformed-panes", "action", "list-panes", "--json", "--tab"],
+      expect.objectContaining({ stdio: ["ignore", "pipe", "pipe"] }),
+    )
+  })
+
   it("strips tree and working prefixes before resolving visible names for auto-named tabs", async () => {
     const executable = installFakeZellijBinary()
     configureTempZellijCache("test-session-tree", `tabs {

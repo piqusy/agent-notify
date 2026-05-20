@@ -7,7 +7,7 @@ import type { Config } from "./types.js"
 const ZELLIJ_STATE_PREFIX = "agent-notify-zellij-state"
 const POLLER_PID_FILE = "poller.pid"
 const POLLER_VERSION_FILE = "poller.version"
-const CURRENT_POLLER_VERSION = "6"
+const CURRENT_POLLER_VERSION = "7"
 
 const TAB_NOTIFY_PREFIX = " ● "
 const TAB_WORKING_PREFIX = " ○ "
@@ -154,6 +154,20 @@ function scrubbedZellijEnv(extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
   delete env.ZELLIJ_PANE_ID
   delete env.ZELLIJ_SESSION_NAME
   return env
+}
+
+function parseJsonArrayOutput<T>(raw: string): T {
+  const trimmed = raw.trim()
+  try {
+    return JSON.parse(trimmed) as T
+  } catch (error) {
+    const firstBracket = trimmed.indexOf("[")
+    const lastBracket = trimmed.lastIndexOf("]")
+    if (firstBracket !== -1 && lastBracket > firstBracket) {
+      return JSON.parse(trimmed.slice(firstBracket, lastBracket + 1)) as T
+    }
+    throw error
+  }
 }
 
 type PaneTabLookup = {
@@ -895,8 +909,21 @@ while :; do
     fi
   done
   if [ "$pending_any" = false ]; then
-    rmdir "$STATE_DIR" 2>/dev/null || true
-    exit 0
+    # Re-check for pane files to avoid a race where a caller wrote state
+    # after we started this iteration but before we reached this point.
+    has_late_pane=false
+    for late_tab_dir in "$STATE_DIR"/tab-*; do
+      [ -d "$late_tab_dir" ] || continue
+      for late_pane_file in "$late_tab_dir"/pane-*.json; do
+        [ -f "$late_pane_file" ] || continue
+        has_late_pane=true
+        break 2
+      done
+    done
+    if [ "$has_late_pane" = false ]; then
+      rmdir "$STATE_DIR" 2>/dev/null || true
+      exit 0
+    fi
   fi
   sleep 1
 done
@@ -1003,7 +1030,22 @@ export async function getCurrentTabInfo(): Promise<CurrentTabInfo | null> {
       return null
     }
 
-    const panes: Array<{ id: number; tab_id: number; tab_name?: string; title?: string; is_plugin?: boolean }> = JSON.parse(panesStdout)
+    let panes: Array<{ id: number; tab_id: number; tab_name?: string; title?: string; is_plugin?: boolean }>
+    try {
+      panes = parseJsonArrayOutput(panesStdout)
+    } catch (error) {
+      if (metadataLookup) {
+        const visibleTabName = resolveVisibleTabName(metadataLookup.tabName, null, prefixes)
+        writeDebugLog({
+          event: "get-current-tab-info-panes-parse-fallback",
+          elapsedMs: elapsedMs(startedAt),
+          paneId,
+          error: error instanceof Error ? error.message : String(error),
+        })
+        return { tabId: metadataLookup.tabId, tabName: metadataLookup.tabName, visibleTabName }
+      }
+      throw error
+    }
     const matchingPanes = panes.filter((entry) => entry.id === numericPaneId)
     const ourPane = matchingPanes.find((entry) => entry.is_plugin === false) ?? matchingPanes[0] ?? null
     const paneTitle = typeof ourPane?.title === "string" ? ourPane.title : null
@@ -1060,7 +1102,7 @@ export async function getCurrentTabInfo(): Promise<CurrentTabInfo | null> {
       return null
     }
 
-    const tabs: Array<{ tab_id: number; active: boolean; name: string }> = JSON.parse(tabsStdout)
+    const tabs: Array<{ tab_id: number; active: boolean; name: string }> = parseJsonArrayOutput(tabsStdout)
     const ourTab = tabs.find((entry) => entry.tab_id === ourPane.tab_id)
     if (!ourTab) {
       writeDebugLog({ event: "get-current-tab-info-miss", elapsedMs: elapsedMs(startedAt), reason: "tab-not-found", paneId, tabId: ourPane.tab_id })
