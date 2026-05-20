@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.24] — 2026-05-20
+
+### Fixed
+- Harden Zellij tab status lookup so junk-prefixed `list-panes --json --tab` output no longer breaks working/attention icon updates.
+- Re-check pending pane state before the poller exits, avoiding a race where a just-written status update could be missed.
+
 ## [0.2.23] — 2026-05-18
 
 ### Fixed
